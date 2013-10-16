@@ -1,0 +1,853 @@
+<!doctype html>
+<title>Kingdom Krawl </title>
+
+<style>
+
+body {
+	background-color: black;
+}
+
+canvas { 
+	display: block;
+	margin-left: auto;
+	margin-right: auto;
+	border: 1px solid gold; 
+	background-color: black;
+}
+
+textarea{
+	display: block;
+	margin-left: auto;
+	margin-right: auto;
+	resize:none;
+	background-color: black;
+	border: 1px solid gold;
+	color: white;
+}
+
+</style>
+
+<head>
+<canvas id="gameDisplay" width="672" height="416"></canvas>
+<textarea id="outputText" cols="80" rows="12" readonly="readonly"></textarea>
+
+<script src="scripts/imageLoader.js"></script>
+<script>
+/*////////////////////////////////////////////
+///			Kingdom Krawl JS   v0.0.6      //
+//////////////////////////////////////////////////
+///
+//	Author: Brian F. Chu
+//	Art: Brian Chu and Eli Boggs
+//	Copyright 2013 SNS Games
+//	Santa Rosa, CA, USA
+//
+//
+//////////////////////////////////////////////////
+///
+//	Features:
+	+ Procedurally generated dungeon layout
+	+ Randomized placement of loot and enemies
+	+ Enemies given random strength levels and health
+	+ 'Camera' follows player as they move and snaps to corners/walls of the grid.
+	+ 8-direction movement using the numpad
+	+ supports sprite tiles
+	+ 
+
+
+	Planned Features:
+	+ dedicated sprites made by the author Brian Chu and Eli Boggs!
+	+ Enemy behaviors: chase, run away, pathing.
+	+ variable Time passage: depending on the 'speed' of the player, actions might take more than 1 turn. when the turn count increases, timePasses() is called, and monster or world behavior is invoked.
+	+ 3 selectable job classes: Strong Hero, Fast Hero, Wise Hero
+	+ movement between 'floors'
+	+ More generation algorithms
+	+ random weapon and armor generation
+	+ spells
+	+ game state saving
+	+ Splash screen, character creation screen, load screen, score screen(game over)
+	+ Items that grant special skills and spells.
+	+ Item World... dive into a world inside your weapons, armor, and skill items to improve them.
+
+//////////////////////////////////////////////////
+///
+//	Known Bugs:
+//	- items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them.
+//	-
+//
+//
+//
+/////////////////////////////////////////////////*/
+
+//Image Loading:
+imageLoader.queueImage("wall");
+imageLoader.queueImage("floor");
+imageLoader.queueImage("water");
+imageLoader.queueImage("hero");
+imageLoader.queueImage("goblin");
+imageLoader.queueImage("treasure");
+imageLoader.queueImage("black");
+
+//Driver
+const WORLD_SEED = new Date().getTime();
+const WORLD_SIZE = 72;		// any positive number
+const TILE_SIZE = 32;		// should be a power of 2
+const DISPLAY_WIDTH = 21; 	// needs to be an odd integer
+const DISPLAY_HEIGHT = 13;	// needs to be an odd integer
+const ENEMY_DENSITY =  0.3; //rate of enemy occurance per row. Number between 0 and 1 is suggested.
+const NUM_ENEMIES = Math.floor(WORLD_SIZE * ENEMY_DENSITY);	// defines how many enemies will be randomly generated
+const EXP_RATE = 2; 		// multiplier on exp gains.
+
+var Dice = {
+	//need to change this function to also accept dice is am XdY format (1d4, 2d6, 1d100...)
+	roll: function (numDice, dieSize){
+		var dRoll = 0;
+		for(var ii = 0; ii < numDice; ii++){
+			dRoll += (Math.floor(Math.random(WORLD_SEED)*100) % dieSize) + 1;
+		}
+		return dRoll;
+	},
+
+	rollPercent: function (){
+		return (Math.floor(Math.random(WORLD_SEED)*100) % 100) + 1;
+	}
+};
+
+var turnCount = 0;
+
+var dungeonGrid = []; //stores the dungeon layout.
+var tileCount = 0;
+//TILES
+//function TileDefinition(name, icon, isWalkable)
+var tileDefinitions = []; //defines the default properties of tile types.
+tileDefinitions[0] = new TileDefinition("WALL", "wall", false);
+tileDefinitions[1] = new TileDefinition("FLOOR", "floor", true);
+tileDefinitions[2] = new TileDefinition("WATER", "water", false);
+tileDefinitions[3] = new TileDefinition("PIT", "black", false);
+
+const WALL_TILE = 0;
+const FLOOR_TILE = 1;
+const WATER_TILE = 2;
+const PIT_TILE = 3;
+
+var creatures = []; //used for storing non-player characters
+var creatureCount = 0;
+
+var items = []; //used for storing items of the given floor
+var itemCount = 0;
+
+var features = []; //used for storing dungeon features like doors, stairs, fountains...
+var featuresCount = 0;
+
+
+//weapons
+//Weapon(name, type, gValue, attack){
+const sword01 = new Weapon("Turbo Lover", "greatsword", 600, 4,12);
+const fist00 = new Weapon("Unnarmed", "fist", 0, 1, 4);
+
+//player initialization
+var PLAYER_DEFAULTS = new Creature( 0, "PC", "hero" ,new Position(WORLD_SIZE/2, WORLD_SIZE/2), "Hiro", 1, sword01 , 10);
+creatures[0] = PLAYER_DEFAULTS;
+var playerIsAlive = true;
+var player = 0;
+creatureCount++;
+
+
+imageLoader.loadQueuedImages(gameRestart);
+
+
+
+
+
+function gameRestart(){
+
+	/*TODO: 
+	-clear the text window on restart
+	-figure out why the game doesn't restart properly when player dies
+	
+	*/
+	dungeonGrid = [];
+	tileCount = 0;
+	creatures = [];
+	creatureCount = 1;
+	items = [];
+	itemCount = 0;
+
+	features = [];
+	featuresCount = 0;
+
+	turnCount = 0;
+
+	creatures[player] = PLAYER_DEFAULTS;
+	creatures[player].health += 100;
+	playerIsAlive = true;
+
+	dungeonGrid = buildWorld(WORLD_SEED);
+
+	drawFrame(creatures[player].currentPosition);
+	prepEventHandlers();
+}
+
+
+
+function gameOverFail(){
+	writeLine("You have died...");
+	//TODO: wait for user input (mouse click) and then go to score screen.
+}
+
+
+function gameOverWin(){
+	writeLine("You have won!");
+	//TODO: win screen (score screen) and wait for user input.
+}
+
+
+
+
+		//////////////////////
+		// World Generation //
+//////////////////////////////////////////////////////////////
+//                             
+//	buildWorld()
+//	buildSparse()	                       
+//                              
+//////////////////////////////////////////////////////////////
+function buildWorld(){
+	var grid = []
+
+	//walls, floors, gold piles
+	buildSparse(grid);
+	//enemies
+	spawnMonsters(grid);
+
+	return grid;
+}
+
+
+function buildSparse(grid){
+	for(var ii = 0; ii < WORLD_SIZE; ii++){
+		for(var kk = 0; kk < WORLD_SIZE; kk++){
+			if((Dice.roll(1,4)) == 1){
+				grid[getGridIndex(kk,ii)] = new Tile(tileCount, WALL_TILE);
+				tileCount++;
+			} else {
+				grid[getGridIndex(kk,ii)] = new Tile(tileCount,FLOOR_TILE);
+				tileCount++;
+				if((Dice.roll(1,60)) == 1){
+					items[itemCount] = new Item("gold", "treasure", new Position(kk,ii) ,150);
+					itemCount++;
+				}
+
+			}
+		}
+	}
+	buildOuterWall(grid);
+}
+
+
+function buildMaze(grid){
+	//carving method: fill the whole grid with walls,
+	fillGrid(WALL_TILE, grid);
+	// then 'carve' out chunks for rooms and halls
+}
+
+function fillGrid(tileType, grid){
+	for (var ii = 0; ii < WORLD_SIZE; ++ii) {
+        for (var kk = 0; kk < WORLD_SIZE; ++kk) {
+		    grid[getGridIndex(kk, ii)] = new Tile(tileCount, WALL_TILE);
+        }
+	}
+	return grid;
+}
+
+function buildOuterWall(grid){
+
+	var numRows = WORLD_SIZE;
+	var numCols = WORLD_SIZE;
+
+	for (var ii = 0; ii < numRows; ++ii) {
+        for (var kk = 0; kk < numCols; ++kk) {
+			if (ii == 0 || ii == numRows - 1 || kk == 0 || kk == numCols - 1) {
+	            grid[getGridIndex(kk, ii)] = new Tile(tileCount, WALL_TILE);
+			}
+        }
+	}
+}
+
+
+function spawnMonsters(grid){
+	for(var ii = 0; ii < NUM_ENEMIES; ii++){
+		var success = false;
+		var limit = 100 + NUM_ENEMIES * NUM_ENEMIES; //limiter to prevent endless loops in rare circumstances
+		var count = 0;
+		while(!success && count < limit){
+			var xToTry = Dice.roll(1,WORLD_SIZE) - 1;
+			var yToTry = Dice.roll(1,WORLD_SIZE) - 1;
+			success = addMonster(grid, xToTry, yToTry);
+			count++;
+		}
+	}
+}
+
+
+//@errors
+function addMonster(grid, x, y){
+	var success = false;
+	var index = getGridIndex(x,y);
+	var tile = grid[index];
+	console.log("trying to add Monster at " +x + ", " + y);
+	try{
+		if(tile.hasCreature(index) == null && tileDefinitions[tile.type].isWalkable){
+			//function Creature(id,type,icon,currentPosition,name,level,weapon,gold)
+			var monster = new Creature(creatureCount, "MONSTER", "goblin", new Position(x,y), "mook", Dice.roll(1,4), fist00, 20);
+			grid[index].addCreature(monster);
+			success = true;
+		}
+	} catch(err){
+		console.log("Error in addMonster: " + err);
+	}
+
+	return success;
+}
+
+
+
+//@constructor
+function TileDefinition(name, icon, isWalkable) {
+	this.name = name;
+	this.icon = icon;
+	this.isWalkable = isWalkable;
+}
+
+
+//@constructor
+function Tile(id, tileType){
+	this.id = id; //unique id
+	this.type = tileType; //identifier for indexing into array of tile definitions.
+
+	this.hasCreature = function(index){
+		try{
+			if(index != null){
+				for(var ii = 0; ii < creatureCount; ii++){
+					if(creatures[ii].currentPosition.x == getGridXY(index).x  &&
+						creatures[ii].currentPosition.y == getGridXY(index).y){
+						return ii;
+					}
+				}
+			} else {
+				for(var ii = 0; ii < creatureCount; ii++){
+					if(creatures[ii].currentPosition.x == getGridXY(this.id).x  &&
+						creatures[ii].currentPosition.y == getGridXY(this.id).y){
+						return ii;
+					}
+				}
+			}
+		} catch(err){
+			console.log("Error in Tile.hasCreature(): " + err);
+		}
+		return null;
+	}
+
+	this.addCreature = function(critter){
+		if(this.hasCreature() == null){
+			creatures[creatureCount] = critter;
+			creatureCount++;
+		}
+	}
+
+	this.hasItem = function(index){
+		if(index != null){
+			for(var ii = 0; ii < itemCount; ii++){
+				if(items[ii].currentPosition.x == getGridXY(index).x  &&
+					items[ii].currentPosition.y == getGridXY(index).y){
+					return ii;
+				}
+			}
+		} else {
+			for(var ii = 0; ii < itemCount; ii++){
+				if(items[ii].currentPosition.x == getGridXY(this.id).x  &&
+					items[ii].currentPosition.y == getGridXY(this.id).y){
+					return ii;
+				}
+			}
+		}
+		return null;
+	}
+}
+
+
+function getGridIndex(x, y){
+	return (x + y*WORLD_SIZE);
+}
+
+
+function getGridXY(index){
+	var x = index % WORLD_SIZE;
+	var y = (index - x) / WORLD_SIZE;
+
+	return new Position(x,y);
+}
+
+
+//@constructor
+function Position(x,y){
+	this.x = x;
+	this.y = y;
+}
+
+
+//@constructor
+function Item(name, icon, position, quantity, properties){
+	this.name = name;
+	this.icon = icon;
+	this.currentPosition = position;
+	this.quantity = quantity;
+	this.properties = properties;
+}
+
+
+//constructor
+function Creature(id,type,icon,currentPosition,name,level,weapon,gold){
+	//system data
+	this.id = id;
+	this.type = type;
+	this.icon = icon;
+	this.currentPosition = currentPosition; //Position obj (x,y)
+	
+	//character data
+	this.name = name;
+	this.level = level;
+	this.exp = 0;
+	
+	//stats
+	this.healthMax = level * 100; //placeholder for job-class values
+	this.currentHealth = this.healthMax;
+	this.manaMax = level *10; //placeholder for job-class values
+	this.currentMana = this.manaMax;
+
+	this.strongth = level * 5; //placeholder for job-class values
+
+	//posessions
+	this.weapon = weapon;
+	this.gold = gold;
+	this.inventory = [];
+
+	this.attack = function(target){
+		if(target != null){
+			var dmg = this.strongth * 0.8 + Dice.roll(this.weapon.damageDice, this.weapon.numDice);
+			Math.floor(dmg);
+			writeLine(this.name + " attacks " + target.name + " for " + dmg + ".");
+			target.currentHealth -= (dmg);
+
+			if(target.currentHealth < 0){
+				writeLine(this.name + " slays " + target.name + ".");
+				this.getExp(target.level * EXP_RATE);
+				target.dies();
+			} else{
+				target.counterAttack(this);
+			}
+		}
+	}
+
+	this.counterAttack = function(attacker){
+		if(attacker != null){
+			var dmg = this.strongth * 0.8 + Dice.roll(this.weapon.damageDice, this.weapon.numDice);
+			Math.floor(dmg);
+			writeLine(this.name + " attacks " + attacker.name + " for " + dmg + ".");
+			attacker.currentHealth -= (dmg);
+			if(attacker.currentHealth < 0){
+				writeLine(this.name + " slays " + attacker.name + ".");
+				this.getExp(attacker.level * EXP_RATE);
+				attacker.dies();
+			}
+		}
+	}
+
+	this.dies = function(){
+		console.log("In Creature.dies(): " + this.id + ": " + this.name);
+		if(this.id == player){
+			playerIsAlive = false;
+		} else {
+			if(this.gold > 0){
+				items[itemCount] = new Item("gold","treasure", this.currentPosition, 20);
+				itemCount++;
+			}
+			creatures.splice(this.id, 1);
+			creatureCount--;
+		}
+	}
+
+	this.getExp = function(val){
+		this.exp += val;
+		if(this.id == creatures[player].id){
+			writeLine("You got " + val + " experience.");
+		}
+		if(this.exp > (this.level+1) * (this.level+1)){
+			this.levelUp();
+		}
+	}
+
+	this.levelUp = function(){
+		this.level++;
+		this.exp -= level * level;
+		this.healthMax += 100;
+		this.currentHealth = this.healthMax;
+		this.manaMax += 10;
+		this.currentMana = this.manaMax;
+		this.strongth += 10;
+		writeLine("You have reached Level " + this.level + "!");
+	}
+
+
+	this.pickUp = function(itemIndex){
+		if(items[itemIndex].name == "gold"){
+			this.gold += items[itemIndex].quantity;
+			items.splice(itemIndex,1);
+			itemCount--;
+		} else {
+			this.iventory[this.inventory.length] += items[itemIndex];
+			items.splice(itemIndex,1);
+			itemCount--;
+		}
+	}
+
+}
+
+
+
+//constructor
+function Weapon(name, type, gValue, power, numDice){
+	this.name = name;
+	this.type = type;
+	this.gValue = gValue;
+	this.damageDice = power;
+	this.numDice = numDice;
+
+}
+
+
+
+
+
+
+
+
+
+
+		/////////////////////
+		// Event Listeners //
+//////////////////////////////////////////////////////////////
+//                             
+//	prepEventHandlers();
+//  playerKeyup(ee);
+//	playerMove(direction);
+//  playerClick(ee);
+//	peekAt();	                       
+//                              
+//////////////////////////////////////////////////////////////
+function prepEventHandlers(){
+	document.addEventListener("keyup", playerKeyup, false);
+	document.addEventListener("click", playerClick, false);
+	console.log("in prepEventHandlers()");
+}
+
+
+
+
+
+function playerKeyup(ee){
+
+	switch(ee.keyCode){
+		case 37: //left arrow
+		case 100: //numpad 4
+			playerMove("LEFT");
+			break;
+		case 38: //up arrow
+		case 104: //numpad 8
+			playerMove("UP");
+			break;
+		case 39: //right arrow
+		case 102: //numpad 6
+			playerMove("RIGHT");
+			break;
+		case 40: // down arrow
+		case 98: //numpad 2
+			playerMove("DOWN");
+			break;
+		case 97: //numpad 1
+			playerMove("SOUTHWEST");
+			break;
+		case 103: //numpad 7
+			playerMove("NORTHWEST");
+			break;
+		case 105: //numpad 9
+			playerMove("NORTHEAST");
+			break;
+		case 99: //numpad 3
+			playerMove("SOUTHEAST");
+			break;
+		case 101: //numpad 5
+			playerMove("WAIT");
+			break;
+		default:
+			return;
+	}
+
+}
+
+
+
+
+//TODO: documentation for playerMove()
+// A lot of the game logic goes through this function, it enables 8 directional movement for the player character, and combat.
+function playerMove(direction){
+	var currentIndex = getGridIndex(creatures[player].currentPosition.x,creatures[player].currentPosition.y);
+
+	if(playerIsAlive){
+		switch(direction){
+			case "LEFT":
+				tryMove(currentIndex, -1,0);
+				break;
+
+			case "UP":
+				tryMove(currentIndex, 0,-1);
+				break;
+
+			case "RIGHT":
+				tryMove(currentIndex, 1,0);
+				break;
+
+			case "DOWN":
+				tryMove(currentIndex,0,1);
+				break;
+
+			case "SOUTHWEST":
+				tryMove(currentIndex, -1,1);
+				break;
+
+			case "NORTHWEST":
+				tryMove(currentIndex, -1,-1);
+				break;
+
+			case "NORTHEAST":
+				tryMove(currentIndex,1,-1);
+				break;
+
+			case "SOUTHEAST":
+				tryMove(currentIndex, 1,1);
+				break;
+
+			case "WAIT":
+				//resting and repeated item pick-up
+				creatures[player].currentHealth += creatures[player].level;
+				creatures[player].currentMana += creatures[player].level;
+				if(creatures[player].currentHealth > creatures[player].healthMax){
+					creatures[player].currentHealth = creatures[player].healthMax;
+				}
+				if(creatures[player].currentMana > creatures[player].manaMax){
+					creatures[player].currentMana = creatures[player].manaMax;
+				}
+				writeLine("You rest and restore " + creatures[player].level + " health and mana. HP: " + creatures[player].currentHealth + "/" + creatures[player].healthMax + " MP: " + creatures[player].currentMana + "/" + creatures[player].manaMax);
+				break;
+
+			default:
+				return;
+		}
+		currentIndex = getGridIndex(creatures[player].currentPosition.x,creatures[player].currentPosition.y);
+
+		//check for items, pick up the first one found in the list.
+		if(dungeonGrid[currentIndex].hasItem() != null){
+			var itemIndex = dungeonGrid[currentIndex].hasItem(currentIndex);
+			var anItem = items[itemIndex];
+			var line = "You pick up " + anItem.quantity + " " + anItem.name + ".";
+			creatures[player].pickUp(itemIndex);
+			if(anItem.name == "gold"){
+				line += " You now have " + creatures[player].gold + " gold.";
+			}
+			writeLine(line);
+			//remove the item from the list
+			items.splice(anItem,1);
+			itemCount--;
+		}
+
+		console.log("[Turn " + turnCount + "] moved to " + creatures[player].currentPosition.x + ", " + creatures[player].currentPosition.y);
+		turnCount++;
+	} else { //player has died:
+		gameOverFail();
+	}
+
+	drawFrame(creatures[player].currentPosition);
+}
+
+
+function tryMove(startIndex, moveX, moveY){
+
+	var pos = new Position (creatures[player].currentPosition.x + moveX, creatures[player].currentPosition.y + moveY);
+	var peek = peekAt(pos.x, pos.y);
+	//console.log("In tryMove(): peek: " + peek );
+	switch(peek){
+		case "WALKABLE":
+			creatures[player].currentPosition.x += moveX;
+			creatures[player].currentPosition.y += moveY;
+			break;
+		case "CREATURE":
+			creatures[player].attack(creatures[dungeonGrid[getGridIndex(pos.x,pos.y)].hasCreature(getGridIndex(pos.x,pos.y))]);
+			break;
+		case "WALL":
+		default:
+			break;
+
+	}
+}
+
+
+function peekAt(x, y){
+	if(!tileDefinitions[dungeonGrid[getGridIndex(x, y)].type].isWalkable){
+		return "WALL";
+	}
+	if(dungeonGrid[getGridIndex(x, y)].hasCreature() != null){
+		return "CREATURE";
+	}
+
+	return "WALKABLE";
+}
+
+function playerClick(ee){
+
+
+}
+
+
+
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+
+
+
+
+
+
+		///////////////
+		// Rendering //
+//////////////////////////////////////////////////////////////
+//                             
+//	drawFram(center)
+//	clearDisplay(display, ctx)
+//	drawTile(ctx, posX, posY, tile)                       
+//                              
+//////////////////////////////////////////////////////////////
+function drawFrame(center){
+	var display = document.getElementById("gameDisplay");
+	var ctx = display.getContext("2d");
+	if(display.getContext) {
+
+		clearDisplay(display, ctx);
+
+		var widthAdjust = (DISPLAY_WIDTH - 1)/2;
+		var heightAdjust = (DISPLAY_HEIGHT - 1)/2;
+
+		var upperLeft = new Position(Math.max(center.x - widthAdjust, 0), Math.max(center.y - heightAdjust,0));
+		if(upperLeft.x > (WORLD_SIZE - DISPLAY_WIDTH)){
+			upperLeft.x = WORLD_SIZE - DISPLAY_WIDTH;
+		}
+		if(upperLeft.y > WORLD_SIZE - DISPLAY_HEIGHT){
+			upperLeft.y = WORLD_SIZE - DISPLAY_HEIGHT;
+		}
+		// console.log("upperLeft = " + upperLeft.x + ", " + upperLeft.y);
+		//var lowerRightIndex = getGridIndex(Math.max(center.x + 10, 0), Math.max(center.y + 6,0));
+
+		//DRAW THE TILES
+		for(var ii = 0; ii < DISPLAY_HEIGHT; ii++){
+			for(var kk = 0; kk < DISPLAY_WIDTH; kk++){
+				var index = getGridIndex(upperLeft.x, upperLeft.y) + getGridIndex(kk,ii);
+				if(index >= 0 && index < (WORLD_SIZE*WORLD_SIZE)){
+					drawTile(ctx, kk, ii, dungeonGrid[index]);
+				}
+			}
+		}
+
+
+
+	}
+}
+
+
+
+//@citation: user: Prestaul at http://stackoverflow.com/questions/2142535/how-to-clear-the-canvas-for-redrawing
+function clearDisplay(display, ctx){
+// Store the current transformation matrix
+ctx.save();
+
+// Use the identity matrix while clearing the canvas
+ctx.setTransform(1, 0, 0, 1, 0, 0);
+ctx.clearRect(0, 0, display.width, display.height);
+
+// Restore the transform
+ctx.restore();
+}
+
+
+
+//posx and posy are x,y coordinates relative of hte upperleft corner of the view.
+function drawTile(ctx, posX, posY, tile){
+	
+	var imageName = tileDefinitions[tile.type].icon;
+	//order of operations:
+	//draw base: 
+	ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE);
+	//draw features: (like doors, stairs)
+	// imageName = tile.feature.icon;
+	// ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE)
+	//draw items:
+	if(tile.hasItem() != null){
+		imageName = items[tile.hasItem()].icon;
+		ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE);
+	}
+	//draw creatures:
+	if(tile.hasCreature() != null){
+		imageName = creatures[tile.hasCreature()].icon;
+		ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE);
+	}
+}
+
+
+//////  Text display 
+
+function writeLine(line){
+	var outputTextArea = document.getElementById("outputText");
+	document.getElementById("outputText").value += line + "\n";
+	
+	outputTextArea.scrollTop = outputTextArea.scrollHeight - outputTextArea.clientHeight;
+}
+
+function printList(array){
+	var line;
+
+	for(var ii = 0; ii < array.length; ii++){
+		line += array[ii] + "\n";
+	}
+
+	writeLine(line);
+}
+
+
+
+//@depricated ;keeping this around for reference.
+function handleInput(){
+	var inputTextArea = document.getElementById("inputText");
+	var outputTextArea = document.getElementById("outputText");
+	
+	var text = inputTextArea.value;
+	
+
+	document.getElementById("inputText").value = "";
+	
+	outputTextArea.scrollTop = outputTextArea.scrollHeight - outputTextArea.clientHeight;
+	
+	return false;
+}
+
+
+
+</script>
+</head>
