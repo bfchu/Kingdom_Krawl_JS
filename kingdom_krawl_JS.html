@@ -34,7 +34,7 @@ textarea{
 <script src="scripts/imageLoader.js"></script>
 <script>
 /*////////////////////////////////////////////
-///			Kingdom Krawl JS   v0.0.6      //
+///			Kingdom Krawl JS   v0.0.7      //
 //////////////////////////////////////////////////
 ///
 //	Author: Brian F. Chu
@@ -53,6 +53,10 @@ textarea{
 	+ 8-direction movement using the numpad
 	+ supports sprite tiles
 	+ simulates dice-rolling for getting random numbers.
+	+ character job class system, used for player character and monsters, allows for random starting gold.
+		-player class is pre-selected in code currently. later there will be a selection screen.
+	+ dungeon features such as doors, stairs, ect...
+	+ multiple floors.
 
 //////////////////////////////////////////////////
 ///
@@ -132,7 +136,7 @@ var items = []; //used for storing items of the given floor
 var itemCount = 0;
 
 var features = []; //used for storing dungeon features like doors, stairs, fountains...
-var featuresCount = 0;
+features[0] = new Feature("Trap Door Down", "trap_door_down", new Position(WORLD_SIZE/2, WORLD_SIZE/2));
 
 
 //weapons
@@ -309,7 +313,6 @@ function spawnMonsters(grid){
 }
 
 
-//@errors
 function addMonster(grid, x, y){
 	var success = false;
 	var index = getGridIndex(x,y);
@@ -317,7 +320,7 @@ function addMonster(grid, x, y){
 	console.log("trying to add Monster at " +x + ", " + y);
 	try{
 		if(tile.hasCreature(index) == null && getTileDef(tile.type).isWalkable){
-			//function Creature(id,type,icon,currentPosition,name,level,weapon,gold)
+			//function Creature(id,type,icon,currentPosition,name,level)
 			var monster = new Creature(creatureCount, "Goblin", "goblin", new Position(x,y), "mook", Dice.roll(1,4));
 			grid[index].addCreature(monster);
 			success = true;
@@ -330,6 +333,33 @@ function addMonster(grid, x, y){
 }
 
 
+function getGridIndex(x, y){
+	return (x + y*WORLD_SIZE);
+}
+
+
+function getGridXY(index){
+	var x = index % WORLD_SIZE;
+	var y = (index - x) / WORLD_SIZE;
+
+	return new Position(x,y);
+}
+
+
+
+
+		 //////////////////////      
+		//	Constructors	//     
+///////////////////////////////////////////////////
+//
+///////
+
+//@constructor
+function Position(x,y,room){
+	this.x = x;
+	this.y = y;
+	this.roomName = room;
+}
 
 //@constructor
 function TileDefinition(name, icon, isWalkable) {
@@ -340,7 +370,7 @@ function TileDefinition(name, icon, isWalkable) {
 
 
 //@constructor
-function Tile(id, tileType){
+function Tile(id, tileType, feature){
 	this.id = id; //unique id
 	this.type = tileType; //identifier for indexing into array of tile definitions.
 
@@ -395,23 +425,27 @@ function Tile(id, tileType){
 }
 
 
-function getGridIndex(x, y){
-	return (x + y*WORLD_SIZE);
-}
-
-
-function getGridXY(index){
-	var x = index % WORLD_SIZE;
-	var y = (index - x) / WORLD_SIZE;
-
-	return new Position(x,y);
-}
 
 
 //@constructor
-function Position(x,y){
-	this.x = x;
-	this.y = y;
+function Feature(name, icon, position, destination, isOneWay, properties){
+	this.name = name;
+	this.icon = icon;
+	this.position = position; //position obj
+	this.doorTo = destination; //if this is a stairs or portal, where does it go? Position obj.
+	this.oneWay = isOneWay; //false if it creates a return portal feature to itself.
+	this.properties = properties; //{} or [] of other properties.
+
+	this.hasDestination = function(){
+		if(this.doorTo != null){
+			return true;
+		} 
+		return false;
+	}
+
+	this.createReciprocal = function(){
+		//if this is a 2-way portal somewhere, make sure that there is a return portal, if there is not, create it.
+	}
 }
 
 
@@ -462,7 +496,7 @@ function Creature(id,job,icon,currentPosition,name,level){
 
 	this.attack = function(target){
 		if(target != null){
-			var dmg = Math.floor(DAMAGE_RATE * this.strongth + Dice.roll(this.weapon.numDice, this.weapon.damageDice));
+			var dmg = this.getDmg();
 			// dmg = Math.floor(dmg);
 			writeLine(this.name + " attacks " + target.name + " for " + dmg + ".");
 			target.currentHealth -= (dmg);
@@ -479,8 +513,7 @@ function Creature(id,job,icon,currentPosition,name,level){
 
 	this.counterAttack = function(attacker){
 		if(attacker != null){
-			var dmg = this.strongth * 0.8 + Dice.roll(this.weapon.damageDice, this.weapon.numDice);
-			Math.floor(dmg);
+			var dmg = this.getDmg();
 			writeLine(this.name + " attacks " + attacker.name + " for " + dmg + ".");
 			attacker.currentHealth -= (dmg);
 			if(attacker.currentHealth < 0){
@@ -489,6 +522,11 @@ function Creature(id,job,icon,currentPosition,name,level){
 				attacker.dies();
 			}
 		}
+	}
+
+
+	this.getDmg = function(){
+		return Math.floor(DAMAGE_RATE * this.strongth + Dice.roll(this.weapon.numDice, this.weapon.damageDice));
 	}
 
 	this.dies = function(){
@@ -530,6 +568,26 @@ function Creature(id,job,icon,currentPosition,name,level){
 	}
 
 
+	this.tryMove = function(moveX, moveY){
+
+		var pos = new Position (this.currentPosition.x + moveX, this.currentPosition.y + moveY);
+		var moveIndex = getGridIndex(pos.x,pos.y);
+		var peek = peekAt(pos.x, pos.y);
+		//console.log("In tryMove(): peek: " + peek );
+		switch(peek){
+			case "WALKABLE":
+				this.currentPosition.x += moveX;
+				this.currentPosition.y += moveY;
+				break;
+			case "CREATURE":
+				this.attack(creatures[dungeonGrid[moveIndex].hasCreature(moveIndex)]);
+				break;
+			case "WALL":
+			default:
+				break;
+		}
+	}
+
 	this.pickUp = function(itemIndex){
 		if(items[itemIndex].name == "gold"){
 			this.gold += items[itemIndex].quantity;
@@ -546,7 +604,7 @@ function Creature(id,job,icon,currentPosition,name,level){
 
 
 
-//constructor
+//@constructor
 function Weapon(name, type, gValue, numDice, damageDice){
 	this.name = name;
 	this.type = type;
@@ -557,7 +615,7 @@ function Weapon(name, type, gValue, numDice, damageDice){
 }
 
 
-
+//@constructor
 function JobClass(className, hitDice, spellDice, strongth, agility, wisdom, startingSkills, startingSpells, startingWeapon, startingGold){
 	this.hitDice = hitDice;
 	this.spellDice = spellDice;
@@ -652,35 +710,35 @@ function playerMove(direction){
 	if(playerIsAlive){
 		switch(direction){
 			case "LEFT":
-				tryMove(currentIndex, -1,0);
+				creatures[player].tryMove(-1,0);
 				break;
 
 			case "UP":
-				tryMove(currentIndex, 0,-1);
+				creatures[player].tryMove(0,-1);
 				break;
 
 			case "RIGHT":
-				tryMove(currentIndex, 1,0);
+				creatures[player].tryMove(1,0);
 				break;
 
 			case "DOWN":
-				tryMove(currentIndex,0,1);
+				creatures[player].tryMove(0,1);
 				break;
 
 			case "SOUTHWEST":
-				tryMove(currentIndex, -1,1);
+				creatures[player].tryMove(-1,1);
 				break;
 
 			case "NORTHWEST":
-				tryMove(currentIndex, -1,-1);
+				creatures[player].tryMove(-1,-1);
 				break;
 
 			case "NORTHEAST":
-				tryMove(currentIndex,1,-1);
+				creatures[player].tryMove(1,-1);
 				break;
 
 			case "SOUTHEAST":
-				tryMove(currentIndex, 1,1);
+				creatures[player].tryMove(1,1);
 				break;
 
 			case "WAIT":
@@ -779,7 +837,8 @@ function playerClick(ee){
 //                             
 //	drawFram(center)
 //	clearDisplay(display, ctx)
-//	drawTile(ctx, posX, posY, tile)                       
+//	drawTile(ctx, posX, posY, tile)  
+//	writeLine(line)                     
 //                              
 //////////////////////////////////////////////////////////////
 function drawFrame(center){
