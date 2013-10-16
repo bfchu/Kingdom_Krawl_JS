@@ -51,6 +51,7 @@ textarea{
 	+ Enemies given random strength levels and health
 	+ 'Camera' follows player as they move and snaps to corners/walls of the grid.
 	+ 8-direction movement using the numpad
+	+ press numpad5 to wait, rest, and view your HP/MP
 	+ supports sprite tiles
 	+ simulates dice-rolling for getting random numbers.
 	+ character job class system, used for player character and monsters, allows for random starting gold.
@@ -129,14 +130,16 @@ function getTileDef(id){
 	}
 }
 
+var features = []; //used for storing dungeon features like doors, stairs, fountains...
+var featureCount = 0;
+
 var creatures = []; //used for storing non-player characters
 var creatureCount = 0;
 
 var items = []; //used for storing items of the given floor
 var itemCount = 0;
 
-var features = []; //used for storing dungeon features like doors, stairs, fountains...
-features[0] = new Feature("Trap Door Down", "trap_door_down", new Position(WORLD_SIZE/2, WORLD_SIZE/2));
+
 
 
 //weapons
@@ -196,7 +199,6 @@ function gameRestart(){
 	creatureCount = 1;
 	items = [];
 	itemCount = 0;
-
 	features = [];
 	featuresCount = 0;
 
@@ -251,20 +253,17 @@ function buildSparse(grid){
 	for(var ii = 0; ii < WORLD_SIZE; ii++){
 		for(var kk = 0; kk < WORLD_SIZE; kk++){
 			if((Dice.roll(1,4)) == 1){
-				grid[getGridIndex(kk,ii)] = new Tile(tileCount, "WALL");
-				tileCount++;
+				addTile(grid, kk, ii, new Tile(tileCount, "WALL"));
 			} else {
-				grid[getGridIndex(kk,ii)] = new Tile(tileCount,"FLOOR");
-				tileCount++;
+				addTile(grid, kk, ii, new Tile(tileCount,"FLOOR"));
 				if((Dice.roll(1,60)) == 1){
-					items[itemCount] = new Item("gold", "treasure", new Position(kk,ii) ,Dice.roll(10,50));
-					itemCount++;
+					grid[getGridIndex(kk,ii)].addItem(new Item("gold", "treasure", new Position(kk,ii) ,Dice.roll(10,50)));
 				}
-
 			}
 		}
 	}
 	buildOuterWall(grid);
+
 }
 
 
@@ -277,10 +276,15 @@ function buildMaze(grid){
 function fillGrid(tileType, grid){
 	for (var ii = 0; ii < WORLD_SIZE; ++ii) {
         for (var kk = 0; kk < WORLD_SIZE; ++kk) {
-		    grid[getGridIndex(kk, ii)] = new Tile(tileCount, "WALL");
+		    addTile(grid, kk, ii, new Tile(tileCount, "WALL"));
         }
 	}
 	return grid;
+}
+
+function addTile(grid, x,y, tile){
+	grid[getGridIndex(x,y)] = tile;
+	tileCount++;
 }
 
 function buildOuterWall(grid){
@@ -291,7 +295,7 @@ function buildOuterWall(grid){
 	for (var ii = 0; ii < numRows; ++ii) {
         for (var kk = 0; kk < numCols; ++kk) {
 			if (ii == 0 || ii == numRows - 1 || kk == 0 || kk == numCols - 1) {
-	            grid[getGridIndex(kk, ii)] = new Tile(tileCount, "WALL");
+	            addTile(grid, kk, ii, new Tile(tileCount, "WALL"));
 			}
         }
 	}
@@ -397,12 +401,30 @@ function Tile(id, tileType, feature){
 		return null;
 	}
 
-	this.addCreature = function(critter){
-		if(this.hasCreature() == null){
-			creatures[creatureCount] = critter;
-			creatureCount++;
+
+	this.hasFeature = function(index){
+		try{
+			if(index != null){
+				for(var ii = 0; ii < featureCount; ii++){
+					if(features[ii].currentPosition.x == getGridXY(index).x  &&
+						features[ii].currentPosition.y == getGridXY(index).y){
+						return ii;
+					}
+				}
+			} else {
+				for(var ii = 0; ii < featureCount; ii++){
+					if(features[ii].currentPosition.x == getGridXY(this.id).x  &&
+						features[ii].currentPosition.y == getGridXY(this.id).y){
+						return ii;
+					}
+				}
+			}
+		} catch(err){
+			console.log("Error in Tile.hasFeature(): " + err);
 		}
+		return null;
 	}
+
 
 	this.hasItem = function(index){
 		if(index != null){
@@ -422,6 +444,30 @@ function Tile(id, tileType, feature){
 		}
 		return null;
 	}
+
+
+	this.addCreature = function(critter){
+		if(this.hasCreature() == null){  //creatures do not share space with eachother.
+			creatures[creatureCount] = critter;
+			creatureCount++;
+		}
+	}
+
+	this.addFeature = function(mcguffin){
+		if(this.hasFeature() == null){ //features do not share space with eachother, but can sometimes be part of a wall, pit, ect...
+			features[featureCount] = mcguffin;
+			featureCount++;
+		}
+	}
+
+
+	this.addItem = function(item){
+		if(this.hasFeature() == null){ //items cannot share space with Features, walls, pits, ect...
+			items[itemCount] = item;
+			itemCount++;
+		}
+	}
+
 }
 
 
@@ -901,8 +947,10 @@ function drawTile(ctx, posX, posY, tile){
 	//draw base: 
 	ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE);
 	//draw features: (like doors, stairs)
-	// imageName = tile.feature.icon;
-	// ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE)
+	if(tile.hasFeature() != null){
+		imageName = features[tile.hasFeature()].icon;
+		ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE);
+	}
 	//draw items:
 	if(tile.hasItem() != null){
 		imageName = items[tile.hasItem()].icon;
