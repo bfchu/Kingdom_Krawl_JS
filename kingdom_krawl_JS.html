@@ -52,28 +52,13 @@ textarea{
 	+ 'Camera' follows player as they move and snaps to corners/walls of the grid.
 	+ 8-direction movement using the numpad
 	+ supports sprite tiles
-	+ 
-
-
-	Planned Features:
-	+ dedicated sprites made by the author Brian Chu and Eli Boggs!
-	+ Enemy behaviors: chase, run away, pathing.
-	+ variable Time passage: depending on the 'speed' of the player, actions might take more than 1 turn. when the turn count increases, timePasses() is called, and monster or world behavior is invoked.
-	+ 3 selectable job classes: Strong Hero, Fast Hero, Wise Hero
-	+ movement between 'floors'
-	+ More generation algorithms
-	+ random weapon and armor generation
-	+ spells
-	+ game state saving
-	+ Splash screen, character creation screen, load screen, score screen(game over)
-	+ Items that grant special skills and spells.
-	+ Item World... dive into a world inside your weapons, armor, and skill items to improve them.
+	+ simulates dice-rolling for getting random numbers.
 
 //////////////////////////////////////////////////
 ///
 //	Known Bugs:
 //	- items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them.
-//	-
+//	- sometimes enemies are dying multiple times if they are one-shot.
 //
 //
 //
@@ -97,6 +82,7 @@ const DISPLAY_HEIGHT = 13;	// needs to be an odd integer
 const ENEMY_DENSITY =  0.3; //rate of enemy occurance per row. Number between 0 and 1 is suggested.
 const NUM_ENEMIES = Math.floor(WORLD_SIZE * ENEMY_DENSITY);	// defines how many enemies will be randomly generated
 const EXP_RATE = 2; 		// multiplier on exp gains.
+const DAMAGE_RATE = 0.2; 	// multiplier on attack damage. affects the way STRONGTH effects damage result
 
 var Dice = {
 	//need to change this function to also accept dice is am XdY format (1d4, 2d6, 1d100...)
@@ -125,7 +111,6 @@ tileDefinitions[1] = new TileDefinition("FLOOR", "floor", true);
 tileDefinitions[2] = new TileDefinition("WATER", "water", false);
 tileDefinitions[3] = new TileDefinition("PIT", "black", false);
 
-
 function getTileDef(id){
 	switch(id.toUpperCase()){
 		case "FLOOR":
@@ -151,12 +136,37 @@ var featuresCount = 0;
 
 
 //weapons
-//Weapon(name, type, gValue, attack){
+//Weapon(name, type, gValue, power, numDice){
 const sword01 = new Weapon("Turbo Lover", "greatsword", 600, 4,12);
+const sword02 = new Weapon("Fate Sever", "dagger", 1000, 8,6);
+const sword03 = new Weapon("Rainfall", "rapier", 20000, 1,6);
 const fist00 = new Weapon("Unnarmed", "fist", 0, 1, 4);
 
+
+var jobDefinitions = [];
+//JobClass(className, hitDice, spellDice, strongth, agility, wisdom, startingSkills, startingSpells, startingWeapon, startingGold)
+jobDefinitions[0] = new JobClass("Strong Hero", 12, 3, 10,4,1, [], [], sword01, 0);
+jobDefinitions[1] = new JobClass("Fast Hero", 10, 4, 5,8,2, [], [], sword02, 20);
+jobDefinitions[2] = new JobClass("Wise Hero", 8, 8, 4,3,8, [],[], sword03, 100);
+jobDefinitions[3] = new JobClass("Goblin", 10, 1, 6,5,2, [], [] , fist00, {numDice:20, dieSize:8});
+
+function getJobDef(id){
+	switch(id.toUpperCase()){
+		case "STRONG HERO":
+			return jobDefinitions[0];
+		case "FAST HERO":
+			return jobDefinitions[1];
+		case "WISE HERO":
+			return jobDefinitions[2];
+		case "GOBLIN":
+			return jobDefinitions[3];
+		default:
+			return jobDefinitions[3];
+	}
+}
+
 //player initialization
-var PLAYER_DEFAULTS = new Creature( 0, "PC", "hero" ,new Position(WORLD_SIZE/2, WORLD_SIZE/2), "Hiro", 1, sword01 , 10);
+var PLAYER_DEFAULTS = new Creature( 0, "Strong Hero", "hero" ,new Position(WORLD_SIZE/2, WORLD_SIZE/2), "Hiro", 1, sword01 , 10);
 creatures[0] = PLAYER_DEFAULTS;
 var playerIsAlive = true;
 var player = 0;
@@ -189,7 +199,6 @@ function gameRestart(){
 	turnCount = 0;
 
 	creatures[player] = PLAYER_DEFAULTS;
-	creatures[player].health += 100;
 	playerIsAlive = true;
 
 	dungeonGrid = buildWorld(WORLD_SEED);
@@ -309,7 +318,7 @@ function addMonster(grid, x, y){
 	try{
 		if(tile.hasCreature(index) == null && getTileDef(tile.type).isWalkable){
 			//function Creature(id,type,icon,currentPosition,name,level,weapon,gold)
-			var monster = new Creature(creatureCount, "MONSTER", "goblin", new Position(x,y), "mook", Dice.roll(1,4), fist00, 20);
+			var monster = new Creature(creatureCount, "Goblin", "goblin", new Position(x,y), "mook", Dice.roll(1,4));
 			grid[index].addCreature(monster);
 			success = true;
 		}
@@ -417,10 +426,10 @@ function Item(name, icon, position, quantity, properties){
 
 
 //constructor
-function Creature(id,type,icon,currentPosition,name,level,weapon,gold){
+function Creature(id,job,icon,currentPosition,name,level){
 	//system data
 	this.id = id;
-	this.type = type;
+	this.job = job; //JobClass obj; contains stat rates for leveling.
 	this.icon = icon;
 	this.currentPosition = currentPosition; //Position obj (x,y)
 	
@@ -430,22 +439,31 @@ function Creature(id,type,icon,currentPosition,name,level,weapon,gold){
 	this.exp = 0;
 	
 	//stats
-	this.healthMax = level * 100; //placeholder for job-class values
+	this.healthMax = level * getJobDef(this.job).hitDice;
 	this.currentHealth = this.healthMax;
-	this.manaMax = level *10; //placeholder for job-class values
+	this.manaMax = level * getJobDef(this.job).spellDice;
 	this.currentMana = this.manaMax;
 
-	this.strongth = level * 5; //placeholder for job-class values
+	this.strongth = level * getJobDef(this.job).strongth; 
+	this.agility = level * getJobDef(this.job).agility;
+	this.wisdom = level * getJobDef(this.job).wisdom;
+
+	this.skills = getJobDef(this.job).startingSkills; //array[] of skills values in doubles.
+	this.spells = getJobDef(this.job).startingSpells;
 
 	//posessions
-	this.weapon = weapon;
-	this.gold = gold;
+	this.weapon = getJobDef(this.job).startingWeapon;
+	if(getJobDef(this.job).startingGold.numDice != null){
+		this.gold = Dice.roll(getJobDef(this.job).startingGold.numDice, getJobDef(this.job).startingGold.dieSize);
+	} else {
+		this.gold = getJobDef(this.job).startingGold;
+	}
 	this.inventory = [];
 
 	this.attack = function(target){
 		if(target != null){
-			var dmg = this.strongth * 0.8 + Dice.roll(this.weapon.damageDice, this.weapon.numDice);
-			Math.floor(dmg);
+			var dmg = Math.floor(DAMAGE_RATE * this.strongth + Dice.roll(this.weapon.numDice, this.weapon.damageDice));
+			// dmg = Math.floor(dmg);
 			writeLine(this.name + " attacks " + target.name + " for " + dmg + ".");
 			target.currentHealth -= (dmg);
 
@@ -500,11 +518,14 @@ function Creature(id,type,icon,currentPosition,name,level,weapon,gold){
 	this.levelUp = function(){
 		this.level++;
 		this.exp -= level * level;
-		this.healthMax += 100;
+		this.healthMax += getJobDef(this.job).hitDice;
 		this.currentHealth = this.healthMax;
-		this.manaMax += 10;
+		this.manaMax += getJobDef(this.job).spellDice;
 		this.currentMana = this.manaMax;
-		this.strongth += 10;
+		this.strongth += getJobDef(this.job).strongth;
+		this.agility += getJobDef(this.job).agility;
+		this.wisdom += getJobDef(this.job).wisdom;
+
 		writeLine("You have reached Level " + this.level + "!");
 	}
 
@@ -526,18 +547,33 @@ function Creature(id,type,icon,currentPosition,name,level,weapon,gold){
 
 
 //constructor
-function Weapon(name, type, gValue, power, numDice){
+function Weapon(name, type, gValue, numDice, damageDice){
 	this.name = name;
 	this.type = type;
 	this.gValue = gValue;
-	this.damageDice = power;
+	this.damageDice = damageDice;
 	this.numDice = numDice;
 
 }
 
 
 
+function JobClass(className, hitDice, spellDice, strongth, agility, wisdom, startingSkills, startingSpells, startingWeapon, startingGold){
+	this.hitDice = hitDice;
+	this.spellDice = spellDice;
 
+	this.strongth = strongth; 
+	this.agility = agility;
+	this.wisdom = wisdom;
+
+	this.startingSkills = startingSkills; //array[] of skills values in doubles.
+	this.startingSpells = startingSpells;
+
+	//posessions
+	this.startingWeapon = startingWeapon;
+	this.startingGold = startingGold;
+	//this.equipment = startingEquips;
+}
 
 
 
