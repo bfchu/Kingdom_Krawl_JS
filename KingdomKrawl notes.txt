@@ -37,8 +37,8 @@
 //////////////////////////////////////////////////
 ///
 //	Known Bugs:
-//	- items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them. (no longer can reproduce, solved?)
-//	-
+//	- items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them.
+//	- sometimes enemies are dying multiple times if they are one-shot.
 //
 //
 //

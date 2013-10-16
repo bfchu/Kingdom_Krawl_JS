@@ -63,6 +63,7 @@ textarea{
 ///
 //	Known Bugs:
 //	- items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them.
+		-related: sometimes adjacent enemies will die at the same time, even if they are different types.
 //	- sometimes enemies are dying multiple times if they are one-shot.
 //
 //
@@ -77,6 +78,9 @@ imageLoader.queueImage("hero");
 imageLoader.queueImage("goblin");
 imageLoader.queueImage("treasure");
 imageLoader.queueImage("black");
+imageLoader.queueImage("door");
+imageLoader.queueImage("golem");
+imageLoader.queueImage("dragon");
 
 //Driver
 const WORLD_SEED = new Date().getTime();
@@ -152,10 +156,12 @@ const fist00 = new Weapon("Unnarmed", "fist", 0, 1, 4);
 
 var jobDefinitions = [];
 //JobClass(className, hitDice, spellDice, strongth, agility, wisdom, startingSkills, startingSpells, startingWeapon, startingGold)
-jobDefinitions[0] = new JobClass("Strong Hero", 12, 3, 10,4,1, [], [], sword01, 0);
-jobDefinitions[1] = new JobClass("Fast Hero", 10, 4, 5,8,2, [], [], sword02, 20);
-jobDefinitions[2] = new JobClass("Wise Hero", 8, 8, 4,3,8, [],[], sword03, 100);
-jobDefinitions[3] = new JobClass("Goblin", 10, 1, 6,5,2, [], [] , fist00, {numDice:20, dieSize:8});
+jobDefinitions[0] = new JobClass("Strong Hero", "hero", 12, 3, 10,4,1, [], [], sword01, 0);
+jobDefinitions[1] = new JobClass("Fast Hero","hero", 10, 4, 5,8,2, [], [], sword02, 20);
+jobDefinitions[2] = new JobClass("Wise Hero", "hero", 8, 8, 4,3,8, [],[], sword03, 100);
+jobDefinitions[3] = new JobClass("Goblin", "goblin", 10, 1, 6,5,2, [], [] , fist00, {numDice:20, dieSize:8});
+jobDefinitions[4] = new JobClass("Dragon", "dragon", 12, 4, 10,6,4, [], [], fist00, {numDice:20, dieSize:100});
+jobDefinitions[5] = new JobClass("Golem", "golem", 20, 1, 8,2,1, [], [], fist00, {numDice:20, dieSize:6});
 
 function getJobDef(id){
 	switch(id.toUpperCase()){
@@ -167,17 +173,42 @@ function getJobDef(id){
 			return jobDefinitions[2];
 		case "GOBLIN":
 			return jobDefinitions[3];
+		case "DRAGON":
+			return jobDefinitions[4];
+		case "GOLEM":
+			return jobDefinitions[5];
 		default:
 			return jobDefinitions[3];
 	}
 }
 
+function getRandMonster(){
+	var dRoll = Dice.roll(1,3);
+	var index = null;
+	switch(dRoll){
+		case 1:
+			index = "Goblin";
+			break;
+		case 2:
+			index = "Dragon";
+			break;
+		case 3:
+			index = "Golem";
+			break;
+		default:
+			index = "Strong Hero";
+			break;
+	}
+	return index;
+}
+
 //player initialization
-var PLAYER_DEFAULTS = new Creature( 0, "Strong Hero", "hero" ,new Position(WORLD_SIZE/2, WORLD_SIZE/2), "Hiro", 1, sword01 , 10);
+var PLAYER_DEFAULTS = new Creature( creatureCount, "Strong Hero", new Position(WORLD_SIZE/2, WORLD_SIZE/2), "Hiro", 1, sword01 , 10);
 creatures[0] = PLAYER_DEFAULTS;
+creatureCount++;
 var playerIsAlive = true;
 var player = 0;
-creatureCount++;
+
 
 
 imageLoader.loadQueuedImages(gameRestart);
@@ -209,8 +240,8 @@ function gameRestart(){
 
 	dungeonGrid = buildWorld(WORLD_SEED);
 
-	drawFrame(creatures[player].currentPosition);
 	prepEventHandlers();
+	drawFrame(creatures[player].currentPosition);
 }
 
 
@@ -239,12 +270,10 @@ function gameOverWin(){
 //////////////////////////////////////////////////////////////
 function buildWorld(){
 	var grid = []
-
 	//walls, floors, gold piles
 	buildSparse(grid);
 	//enemies
 	spawnMonsters(grid);
-
 	return grid;
 }
 
@@ -256,7 +285,10 @@ function buildSparse(grid){
 				addTile(grid, kk, ii, new Tile(tileCount, "WALL"));
 			} else {
 				addTile(grid, kk, ii, new Tile(tileCount,"FLOOR"));
-				if((Dice.roll(1,60)) == 1){
+				if((Dice.roll(1,WORLD_SIZE)) == 1){
+					grid[getGridIndex(kk,ii)].addFeature( new Feature("Dungeon Exit", "door", new Position(kk,ii)));
+				}
+				if((Dice.roll(1,WORLD_SIZE)) == 1){
 					grid[getGridIndex(kk,ii)].addItem(new Item("gold", "treasure", new Position(kk,ii) ,Dice.roll(10,50)));
 				}
 			}
@@ -264,6 +296,8 @@ function buildSparse(grid){
 	}
 	buildOuterWall(grid);
 
+	var playerStart = getGridIndex(creatures[player].currentPosition.x, creatures[player].currentPosition.y);
+	grid[playerStart].addFeature( new Feature("Dungeon Exit", "door", getGridXY(playerStart)));
 }
 
 
@@ -272,6 +306,7 @@ function buildMaze(grid){
 	fillGrid("WALL", grid);
 	// then 'carve' out chunks for rooms and halls
 }
+
 
 function fillGrid(tileType, grid){
 	for (var ii = 0; ii < WORLD_SIZE; ++ii) {
@@ -282,10 +317,7 @@ function fillGrid(tileType, grid){
 	return grid;
 }
 
-function addTile(grid, x,y, tile){
-	grid[getGridIndex(x,y)] = tile;
-	tileCount++;
-}
+
 
 function buildOuterWall(grid){
 
@@ -317,6 +349,12 @@ function spawnMonsters(grid){
 }
 
 
+function addTile(grid, x,y, tile){
+	grid[getGridIndex(x,y)] = tile;
+	tileCount++;
+}
+
+
 function addMonster(grid, x, y){
 	var success = false;
 	var index = getGridIndex(x,y);
@@ -325,7 +363,8 @@ function addMonster(grid, x, y){
 	try{
 		if(tile.hasCreature(index) == null && getTileDef(tile.type).isWalkable){
 			//function Creature(id,type,icon,currentPosition,name,level)
-			var monster = new Creature(creatureCount, "Goblin", "goblin", new Position(x,y), "mook", Dice.roll(1,4));
+			var namai = getRandMonster();
+			var monster = new Creature(creatureCount, namai, new Position(x,y), namai, Dice.roll(1,4));
 			grid[index].addCreature(monster);
 			success = true;
 		}
@@ -406,15 +445,15 @@ function Tile(id, tileType, feature){
 		try{
 			if(index != null){
 				for(var ii = 0; ii < featureCount; ii++){
-					if(features[ii].currentPosition.x == getGridXY(index).x  &&
-						features[ii].currentPosition.y == getGridXY(index).y){
+					if(features[ii].position.x == getGridXY(index).x  &&
+						features[ii].position.y == getGridXY(index).y){
 						return ii;
 					}
 				}
 			} else {
 				for(var ii = 0; ii < featureCount; ii++){
-					if(features[ii].currentPosition.x == getGridXY(this.id).x  &&
-						features[ii].currentPosition.y == getGridXY(this.id).y){
+					if(features[ii].position.x == getGridXY(this.id).x  &&
+						features[ii].position.y == getGridXY(this.id).y){
 						return ii;
 					}
 				}
@@ -506,11 +545,11 @@ function Item(name, icon, position, quantity, properties){
 
 
 //constructor
-function Creature(id,job,icon,currentPosition,name,level){
+function Creature(id,job,currentPosition,name,level){
 	//system data
 	this.id = id;
 	this.job = job; //JobClass obj; contains stat rates for leveling.
-	this.icon = icon;
+	this.icon = getJobDef(this.job).icon;
 	this.currentPosition = currentPosition; //Position obj (x,y)
 	
 	//character data
@@ -662,7 +701,9 @@ function Weapon(name, type, gValue, numDice, damageDice){
 
 
 //@constructor
-function JobClass(className, hitDice, spellDice, strongth, agility, wisdom, startingSkills, startingSpells, startingWeapon, startingGold){
+function JobClass(className, icon, hitDice, spellDice, strongth, agility, wisdom, startingSkills, startingSpells, startingWeapon, startingGold){
+	this.className = className;
+	this.icon = icon;
 	this.hitDice = hitDice;
 	this.spellDice = spellDice;
 
@@ -815,9 +856,6 @@ function playerMove(direction){
 				line += " You now have " + creatures[player].gold + " gold.";
 			}
 			writeLine(line);
-			//remove the item from the list
-			items.splice(anItem,1);
-			itemCount--;
 		}
 
 		console.log("[Turn " + turnCount + "] moved to " + creatures[player].currentPosition.x + ", " + creatures[player].currentPosition.y);
@@ -948,6 +986,7 @@ function drawTile(ctx, posX, posY, tile){
 	ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE);
 	//draw features: (like doors, stairs)
 	if(tile.hasFeature() != null){
+		console.log("In drawTile(): feature.");
 		imageName = features[tile.hasFeature()].icon;
 		ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE);
 	}
