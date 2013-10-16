@@ -1,0 +1,54 @@
+/*////////////////////////////////////////////
+///         Kingdom Krawl JS   v0.0.6      //
+//////////////////////////////////////////////////
+///
+//	Author: Brian F. Chu
+//	Art: Brian F. Chu and Eli Boggs
+//	Copyright 2013 SNS Games
+//	Santa Rosa, CA, USA
+//
+//
+//////////////////////////////////////////////////
+///
+//	Features:
+	+ Procedurally generated dungeon layout
+	+ Randomized placement of loot and enemies
+	+ Enemies given random strength levels and health
+	+ 'Camera' follows player as they move and snaps to corners/walls of the grid.
+	+ 8-direction movement using the numpad
+	+ supports sprite tiles
+	+ 
+
+
+	Planned Features:
+	+ dedicated sprites made by the author Brian Chu and Eli Boggs!
+	+ Enemy behaviors: chase, run away, pathing.
+	+ variable Time passage: depending on the 'speed' of the player, actions might take more than 1 turn. when the turn count increases, timePasses() is called, and monster or world behavior is invoked.
+	+ 3 selectable job classes: Strong Hero, Fast Hero, Wise Hero
+	+ movement between 'floors'
+	+ More generation algorithms
+	+ random weapon and armor generation
+	+ spells
+	+ game state saving
+	+ Splash screen, character creation screen, load screen, score screen(game over)
+	+ Items that grant special skills and spells.
+	+ Item World... dive into a world inside your weapons, armor, and skill items to improve them.
+
+//////////////////////////////////////////////////
+///
+//	Known Bugs:
+//	- items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them. (no longer can reproduce, solved?)
+//	-
+//
+//
+//
+/////////////////////////////////////////////////*/
+
+
+
+Job Class system:
+
+	Your character's job class determines the rate at which different stats grow, and it determines what your starting skills and equipment are.  There are no job restrictions on using equipment or abilities past the beginning. Monsters also have a job class, it is their creature type.
+
+
+

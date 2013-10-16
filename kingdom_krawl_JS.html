@@ -125,10 +125,20 @@ tileDefinitions[1] = new TileDefinition("FLOOR", "floor", true);
 tileDefinitions[2] = new TileDefinition("WATER", "water", false);
 tileDefinitions[3] = new TileDefinition("PIT", "black", false);
 
-const WALL_TILE = 0;
-const FLOOR_TILE = 1;
-const WATER_TILE = 2;
-const PIT_TILE = 3;
+
+function getTileDef(id){
+	switch(id.toUpperCase()){
+		case "FLOOR":
+			return tileDefinitions[1];
+		case "WATER":
+			return tileDefinitions[2];
+		case "PIT":
+			return tileDefinitions[3];
+		case "WALL":
+		default:
+			return tileDefinitions[0];
+	}
+}
 
 var creatures = []; //used for storing non-player characters
 var creatureCount = 0;
@@ -228,13 +238,13 @@ function buildSparse(grid){
 	for(var ii = 0; ii < WORLD_SIZE; ii++){
 		for(var kk = 0; kk < WORLD_SIZE; kk++){
 			if((Dice.roll(1,4)) == 1){
-				grid[getGridIndex(kk,ii)] = new Tile(tileCount, WALL_TILE);
+				grid[getGridIndex(kk,ii)] = new Tile(tileCount, "WALL");
 				tileCount++;
 			} else {
-				grid[getGridIndex(kk,ii)] = new Tile(tileCount,FLOOR_TILE);
+				grid[getGridIndex(kk,ii)] = new Tile(tileCount,"FLOOR");
 				tileCount++;
 				if((Dice.roll(1,60)) == 1){
-					items[itemCount] = new Item("gold", "treasure", new Position(kk,ii) ,150);
+					items[itemCount] = new Item("gold", "treasure", new Position(kk,ii) ,Dice.roll(10,50));
 					itemCount++;
 				}
 
@@ -247,14 +257,14 @@ function buildSparse(grid){
 
 function buildMaze(grid){
 	//carving method: fill the whole grid with walls,
-	fillGrid(WALL_TILE, grid);
+	fillGrid("WALL", grid);
 	// then 'carve' out chunks for rooms and halls
 }
 
 function fillGrid(tileType, grid){
 	for (var ii = 0; ii < WORLD_SIZE; ++ii) {
         for (var kk = 0; kk < WORLD_SIZE; ++kk) {
-		    grid[getGridIndex(kk, ii)] = new Tile(tileCount, WALL_TILE);
+		    grid[getGridIndex(kk, ii)] = new Tile(tileCount, "WALL");
         }
 	}
 	return grid;
@@ -268,7 +278,7 @@ function buildOuterWall(grid){
 	for (var ii = 0; ii < numRows; ++ii) {
         for (var kk = 0; kk < numCols; ++kk) {
 			if (ii == 0 || ii == numRows - 1 || kk == 0 || kk == numCols - 1) {
-	            grid[getGridIndex(kk, ii)] = new Tile(tileCount, WALL_TILE);
+	            grid[getGridIndex(kk, ii)] = new Tile(tileCount, "WALL");
 			}
         }
 	}
@@ -297,7 +307,7 @@ function addMonster(grid, x, y){
 	var tile = grid[index];
 	console.log("trying to add Monster at " +x + ", " + y);
 	try{
-		if(tile.hasCreature(index) == null && tileDefinitions[tile.type].isWalkable){
+		if(tile.hasCreature(index) == null && getTileDef(tile.type).isWalkable){
 			//function Creature(id,type,icon,currentPosition,name,level,weapon,gold)
 			var monster = new Creature(creatureCount, "MONSTER", "goblin", new Position(x,y), "mook", Dice.roll(1,4), fist00, 20);
 			grid[index].addCreature(monster);
@@ -469,7 +479,7 @@ function Creature(id,type,icon,currentPosition,name,level,weapon,gold){
 			playerIsAlive = false;
 		} else {
 			if(this.gold > 0){
-				items[itemCount] = new Item("gold","treasure", this.currentPosition, 20);
+				items[itemCount] = new Item("gold","treasure", this.currentPosition, this.gold);
 				itemCount++;
 			}
 			creatures.splice(this.id, 1);
@@ -702,7 +712,7 @@ function tryMove(startIndex, moveX, moveY){
 
 
 function peekAt(x, y){
-	if(!tileDefinitions[dungeonGrid[getGridIndex(x, y)].type].isWalkable){
+	if(!getTileDef(dungeonGrid[getGridIndex(x, y)].type).isWalkable){
 		return "WALL";
 	}
 	if(dungeonGrid[getGridIndex(x, y)].hasCreature() != null){
@@ -791,7 +801,7 @@ ctx.restore();
 //posx and posy are x,y coordinates relative of hte upperleft corner of the view.
 function drawTile(ctx, posX, posY, tile){
 	
-	var imageName = tileDefinitions[tile.type].icon;
+	var imageName = getTileDef(tile.type).icon;
 	//order of operations:
 	//draw base: 
 	ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE);
