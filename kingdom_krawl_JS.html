@@ -34,7 +34,7 @@ textarea{
 <script src="scripts/imageLoader.js"></script>
 <script>
 /*////////////////////////////////////////////
-///			Kingdom Krawl JS   v0.0.7      //
+///			Kingdom Krawl JS   v0.0.8      //
 //////////////////////////////////////////////////
 ///
 //	Author: Brian F. Chu
@@ -56,9 +56,11 @@ textarea{
 	+ simulates dice-rolling for getting random numbers.
 	+ character job class system, used for player character and monsters, allows for random starting gold.
 		-player class is pre-selected in code currently. later there will be a selection screen.
+
 	+ TODO: dungeon features such as doors, portals, stairs, traps, ect...
 	+ TODO: add a button to allow player to interact with features such as stairs.
 	+ TODO: multiple floors/rooms.
+	+ TODO: documentation...
 
 //////////////////////////////////////////////////
 ///
@@ -310,6 +312,15 @@ function Position(x,y,floorId){
 	this.x = x;
 	this.y = y;
 	this.floor = floorId;
+
+	this.equals = function(other){
+		if( this.x == other.x &&
+			this.y == other.y &&
+			this.floor == other.floor){
+			return true;
+		}
+		return false;
+	}
 }
 
 //@constructor
@@ -629,6 +640,15 @@ function Creature(id,job,position,name,level){
 		return getGridIndex(position.x, position.y);
 	}
 
+	this.findMe = function(){ //returns the index into creatures[] that matches this creature's position.
+		for(var ii = 0; ii< creatureCount; ii++){
+			if(creatures[ii].position.equals(this.position)){
+				return ii;
+			}
+		}
+		return null;
+	}
+
 	this.attack = function(target){
 		if(target != null){
 			var dmg = this.getDmg();
@@ -665,22 +685,24 @@ function Creature(id,job,position,name,level){
 	}
 
 	this.dies = function(){
-		console.log("In Creature.dies(): " + this.id + ": " + this.name);
-		if(this.id == player){
+		console.log("In Creature.dies(): " + this.findMe() + ": " + this.name);
+		if(this.findMe() == player){
 			playerIsAlive = false;
+			creatures.splice(this.findMe(), 1);
+			creatureCount--;
 		} else {
 			if(this.gold > 0){
 				items[itemCount] = new Item("gold","treasure", this.position, this.gold);
 				itemCount++;
 			}
-			creatures.splice(this.id, 1);
+			creatures.splice(this.findMe(), 1);
 			creatureCount--;
 		}
 	}
 
 	this.getExp = function(val){
 		this.exp += val;
-		if(this.id == creatures[player].id){
+		if(this.findMe() == player){
 			writeLine("You got " + val + " experience.");
 		}
 		if(this.exp > (this.level+1) * (this.level+1)){
