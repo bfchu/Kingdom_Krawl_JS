@@ -279,10 +279,9 @@ function buildWorld(){
 }
 
 function addFloor(name){
-	world[floorCount] = new Floor(floorCount, name);
-	world[floorCount].buildFloor();
-
 	floorCount++;
+	world[floorCount -1] = new Floor(floorCount-1, name);
+	world[floorCount -1].buildFloor();
 }
 
 
@@ -333,6 +332,23 @@ function Floor(id, name){
 	this.tileGrid = [];
 	this.tileCount = 0;
 
+	this.findMe = function(floorName){
+		if(floorName !=null){
+			for(var ii = 0; ii< floorCount; ii++){
+				if(world[ii].name == floorName){
+					return ii;
+				}
+			}
+		} else {
+			for(var ii = 0; ii< floorCount; ii++){
+				if(world[ii].name == this.name){
+					return ii;
+				}
+			}
+		}
+		return -1;
+	}
+
 	this.buildFloor = function(genStyle){
 		var s = "";
 		if (genStyle != null) {
@@ -359,17 +375,18 @@ function Floor(id, name){
 	}
 
 	this.buildSparse = function(){
+		var floorIndex = this.findMe();
 		for(var ii = 0; ii < WORLD_SIZE; ii++){
 			for(var kk = 0; kk < WORLD_SIZE; kk++){
 				if((Dice.roll(1,4)) == 1){
-					this.addTile(kk, ii, new Tile(this.tileCount, "WALL", new Position(kk,ii,this.id)));
+					this.addTile(kk, ii, new Tile(this.tileCount, "WALL", new Position(kk,ii,floorIndex)));
 				} else {
-					this.addTile(kk, ii, new Tile(this.tileCount,"FLOOR", new Position(kk,ii,this.id)));
+					this.addTile(kk, ii, new Tile(this.tileCount,"FLOOR", new Position(kk,ii,floorIndex)));
 					if((Dice.roll(1,WORLD_SIZE)) == 1){
-						this.addFeature( new Feature("Stairs", "door", new Position(kk,ii,this.id), new Position(kk,ii, Dice.roll(1,WORLD_DEPTH)-1), true));
+						this.addFeature( new Feature("Stairs", "door", new Position(kk,ii,floorIndex), new Position(kk,ii, Dice.roll(1,WORLD_DEPTH)-1), true));
 					}
 					if((Dice.roll(1,WORLD_SIZE)) == 1){
-						this.addItem(new Item("gold", "treasure", new Position(kk,ii,this.id) ,Dice.roll(10,50)));
+						this.addItem(new Item("gold", "treasure", new Position(kk,ii,floorIndex) ,Dice.roll(10,50)));
 					}
 				}
 			}
@@ -378,15 +395,15 @@ function Floor(id, name){
 		this.buildOuterWall();
 	}
 
-	this.buildStairs = function(){
+	this.buildStairs = function(floor){
 		var numStairs = 10;
 
 		for(var ii = 0; ii < numStairs; ii++){
 			var xToTry = Dice.roll(1,WORLD_SIZE) - 1;
 			var yToTry = Dice.roll(1,WORLD_SIZE) - 1;
 			var floor = Dice.roll(1,WORLD_DEPTH) - 1;
-			if(world[this.id].tileGrid[getGridIndex(xToTry,yToTry)].isWalkable){
-				this.addFeature( new Feature("Stairs", "door", new Position(xToTry,yToTry,this.id), new Position(xToTry,yToTry, floor), true));
+			if(world[floor].tileGrid[getGridIndex(xToTry,yToTry)].isWalkable){
+				this.addFeature( new Feature("Stairs", "door", new Position(xToTry,yToTry,floor), new Position(xToTry,yToTry, floor), true));
 			}
 		}
 	}
@@ -402,7 +419,7 @@ function Floor(id, name){
 	this.fillGrid = function(tileType){
 		for (var ii = 0; ii < WORLD_SIZE; ++ii) {
 	        for (var kk = 0; kk < WORLD_SIZE; ++kk) {
-			    this.addTile(kk, ii, new Tile(this.tileCount, tileType, new Position(kk,ii,this.id)));
+			    this.addTile(kk, ii, new Tile(this.tileCount, tileType, new Position(kk,ii,this.findMe())));
 	        }
 		}
 	}
@@ -412,7 +429,7 @@ function Floor(id, name){
 		for (var ii = 0; ii < WORLD_SIZE; ++ii) {
 	        for (var kk = 0; kk < WORLD_SIZE; ++kk) {
 				if (ii == 0 || ii == WORLD_SIZE - 1 || kk == 0 || kk == WORLD_SIZE - 1) {
-		            this.addTile(kk, ii, new Tile(this.tileCount, "WALL", new Position(kk,ii,this.id)));
+		            this.addTile(kk, ii, new Tile(this.tileCount, "WALL", new Position(kk,ii,this.findMe())));
 				}
 	        }
 		}
