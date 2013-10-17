@@ -66,7 +66,7 @@ textarea{
 //////////////////////////////////////////////////
 ///
 //	Known Bugs:
-//	- interactWith() or tryMove() not allowing movement between floors.
+//	- floor.createReciprocal() not working correctly.
 //	- RESOLVED:items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them.
 //		-related: sometimes adjacent enemies will die at the same time, even if they are different types.
 //	- RESOLVED:sometimes enemies are dying multiple times if they are one-shot.
@@ -308,6 +308,9 @@ function getGridXY(index){
 }
 
 
+function getTile(position){
+	return world[position.floor].tileGrid[getGridIndex(position.x, position.y)];
+}
 
 
 		 //////////////////////      
@@ -392,7 +395,8 @@ function Floor(id, name){
 				} else {
 					this.addTile(kk, ii, new Tile(this.tileCount,"FLOOR", new Position(kk,ii,floorIndex)));
 					if((Dice.roll(1,WORLD_SIZE)) == 1){
-						this.addFeature( new Feature("Portal", "portal", new Position(kk,ii,floorIndex), new Position(kk,ii, Dice.roll(1,WORLD_DEPTH)-1), true));
+						this.addFeature( new Feature("Portal", "portal", new Position(kk,ii,floorIndex), new Position(kk,ii, Dice.roll(1,WORLD_DEPTH)-1)));
+						this.createReciprocal(features[featureCount-1]);
 					}
 					if((Dice.roll(1,WORLD_SIZE)) == 1){
 						this.addItem(new Item("gold", "treasure", new Position(kk,ii,floorIndex) ,Dice.roll(10,50)));
@@ -488,12 +492,15 @@ function Floor(id, name){
 	}
 
 	this.addFeature = function(mcguffin){
-		if(this.tileGrid[mcguffin.getIndex()].hasFeature() == null){ //features do not share space with eachother, but can sometimes be part of a wall, pit, ect...
+		if(this.tileGrid[mcguffin.getIndex()].hasFeature() == null){ //features do not share space with eachother, but can sometimes be part of a wall, pit, ect
 			features[featureCount] = mcguffin;
 			featureCount++;
 		}
 	}
 
+	this.createReciprocal = function(portal){
+		this.addFeature( new Feature(portal.name, portal.icon, portal.destination, portal.position));
+	}
 
 	this.addItem = function(item){
 		if(this.tileGrid[item.getIndex()].hasFeature() == null){ //items cannot share space with Features, walls, pits, ect...
@@ -603,12 +610,11 @@ function Tile(id, tileType, position){
 
 
 //@constructor
-function Feature(name, icon, position, destination, isOneWay, properties){
+function Feature(name, icon, position, destination, properties){
 	this.name = name;
 	this.icon = icon;
 	this.position = position; //Position obj
 	this.destination = destination; //if this is a stairs or portal, where does it go? Position obj.
-	this.oneWay = isOneWay; //false if it creates a return portal feature to itself.
 	this.properties = properties; //{} or [] of other properties.
 
 	this.getIndex = function(){
@@ -632,9 +638,6 @@ function Feature(name, icon, position, destination, isOneWay, properties){
 		return false;
 	}
 
-	this.createReciprocal = function(){
-		//if this is a 2-way portal somewhere, make sure that there is a return portal, if there is not, create it.
-	}
 }
 
 
@@ -800,12 +803,21 @@ function Creature(id,job,position,name,level){
 		}
 	}
 
+	this.teleport = function(destination){
+
+		if(getTileDef(getTile(destination).type).isWalkable){
+			this.position = destination;
+			writeLine("The portal takes you to " + world[this.position.floor].name + ".");
+		} else {
+			writeLine("Cannot teleport to destination.");
+		}
+	}
+
 	this.interactWith = function(feature){
 		//is it a portal? (stairs, trap doors, gateways)
 
 		if(feature.destination != null){
-			this.position = feature.destination;
-			writeLine("The portal takes you to " + world[this.position.floor].name + ".");
+			this.teleport(feature.destination);
 		}
 		//is it a fountain?
 		//is it a shop?
