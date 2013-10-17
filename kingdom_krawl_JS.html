@@ -34,7 +34,7 @@ textarea{
 <script src="scripts/imageLoader.js"></script>
 <script>
 /*////////////////////////////////////////////
-///			Kingdom Krawl JS   v0.0.8      //
+///			Kingdom Krawl JS   v0.0.9      //
 //////////////////////////////////////////////////
 ///
 //	Author: Brian F. Chu
@@ -66,7 +66,7 @@ textarea{
 //////////////////////////////////////////////////
 ///
 //	Known Bugs:
-//	- floor.createReciprocal() not working correctly: only sometimes successfully creates a return portal in the right spot.
+//	- RESOLVED: floor.createReciprocal() not working correctly: only sometimes successfully creates a return portal in the right spot.
 //	- portals sometimes take you to their own location.
 //	- RESOLVED:items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them.
 //		-related: sometimes adjacent enemies will die at the same time, even if they are different types.
@@ -1121,6 +1121,12 @@ function drawTile(ctx, posX, posY, tile){
 	//draw creatures:
 	if(tile.hasCreature() != null){
 		imageName = creatures[tile.hasCreature()].icon;
+		ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE);
+	}
+
+	//bank out the screen if the player dies.
+	if(!playerIsAlive){
+		imageName = "black";
 		ctx.drawImage(imageLoader.images[imageName], posX*TILE_SIZE, posY*TILE_SIZE);
 	}
 }
