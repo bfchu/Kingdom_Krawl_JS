@@ -56,10 +56,11 @@ textarea{
 	+ simulates dice-rolling for getting random numbers.
 	+ character job class system, used for player character and monsters, allows for random starting gold.
 		-player class is pre-selected in code currently. later there will be a selection screen.
+	+ dungeon features such as doors, portals, stairs, traps, ect...
+	+ allow player to interact with features such as stairs and portals to traverse floors.
+	+ multiple floors/rooms.
 
-	+ TODO: dungeon features such as doors, portals, stairs, traps, ect...
-	+ TODO: add a button to allow player to interact with features such as stairs.
-	+ TODO: multiple floors/rooms.
+	+ TODO: dungeon features such as traps, fountains, ect...
 	+ TODO: documentation...
 
 //////////////////////////////////////////////////
@@ -75,18 +76,26 @@ textarea{
 /////////////////////////////////////////////////*/
 
 //Image Loading:
+//tiles
 imageLoader.queueImage("wall");
 imageLoader.queueImage("floor");
 imageLoader.queueImage("water");
+imageLoader.queueImage("black");
+
+//features
+imageLoader.queueImage("door");
+imageLoader.queueImage("portal");
+
+//items
+imageLoader.queueImage("treasure");
+
+//creatures
 imageLoader.queueImage("hero");
 imageLoader.queueImage("goblin");
-imageLoader.queueImage("treasure");
-imageLoader.queueImage("black");
-imageLoader.queueImage("door");
 imageLoader.queueImage("golem");
 imageLoader.queueImage("dragon");
 
-//Driver
+
 const WORLD_SEED = new Date().getTime();
 const WORLD_SIZE = 72;		// any positive number
 const WORLD_DEPTH = 9;
@@ -383,7 +392,7 @@ function Floor(id, name){
 				} else {
 					this.addTile(kk, ii, new Tile(this.tileCount,"FLOOR", new Position(kk,ii,floorIndex)));
 					if((Dice.roll(1,WORLD_SIZE)) == 1){
-						this.addFeature( new Feature("Stairs", "door", new Position(kk,ii,floorIndex), new Position(kk,ii, Dice.roll(1,WORLD_DEPTH)-1), true));
+						this.addFeature( new Feature("Portal", "portal", new Position(kk,ii,floorIndex), new Position(kk,ii, Dice.roll(1,WORLD_DEPTH)-1), true));
 					}
 					if((Dice.roll(1,WORLD_SIZE)) == 1){
 						this.addItem(new Item("gold", "treasure", new Position(kk,ii,floorIndex) ,Dice.roll(10,50)));
@@ -598,7 +607,7 @@ function Feature(name, icon, position, destination, isOneWay, properties){
 	this.name = name;
 	this.icon = icon;
 	this.position = position; //Position obj
-	this.doorTo = destination; //if this is a stairs or portal, where does it go? Position obj.
+	this.destination = destination; //if this is a stairs or portal, where does it go? Position obj.
 	this.oneWay = isOneWay; //false if it creates a return portal feature to itself.
 	this.properties = properties; //{} or [] of other properties.
 
@@ -617,7 +626,7 @@ function Feature(name, icon, position, destination, isOneWay, properties){
 
 
 	this.hasDestination = function(){
-		if(this.doorTo != null){
+		if(this.destination != null){
 			return true;
 		} 
 		return false;
@@ -793,9 +802,10 @@ function Creature(id,job,position,name,level){
 
 	this.interactWith = function(feature){
 		//is it a portal? (stairs, trap doors, gateways)
-		console.log("In creature.interactWith()");
+
 		if(feature.destination != null){
-			this.tryMove(feature.destination.x - this.position.x, feature.destination.y - this.position.y, feature.destination.floor);
+			this.position = feature.destination;
+			writeLine("The portal takes you to " + world[this.position.floor].name + ".");
 		}
 		//is it a fountain?
 		//is it a shop?
@@ -1003,7 +1013,7 @@ function playerMove(direction){
 			writeLine(line);
 		}
 
-		console.log("[Turn " + turnCount + "] moved to " + creatures[player].position.x + ", " + creatures[player].position.y) + "; " + world[creatures[player].position.floor].name;
+		console.log("[Turn " + turnCount + "] moved to " + creatures[player].position.x + ", " + creatures[player].position.y + "; " + world[creatures[player].position.floor].name);
 		turnCount++;
 	} else { //player has died:
 		gameOverFail();
