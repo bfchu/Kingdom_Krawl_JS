@@ -67,6 +67,7 @@ textarea{
 ///
 //	Known Bugs:
 //	- floor.createReciprocal() not working correctly.
+//	- portals sometimes take you to their own location.
 //	- RESOLVED:items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them.
 //		-related: sometimes adjacent enemies will die at the same time, even if they are different types.
 //	- RESOLVED:sometimes enemies are dying multiple times if they are one-shot.
@@ -96,6 +97,7 @@ imageLoader.queueImage("golem");
 imageLoader.queueImage("dragon");
 
 
+//game settings:
 const WORLD_SEED = new Date().getTime();
 const WORLD_SIZE = 72;		// any positive number
 const WORLD_DEPTH = 9;
@@ -106,6 +108,8 @@ const ENEMY_DENSITY =  0.3; //rate of enemy occurance per row. Number between 0 
 const NUM_ENEMIES = Math.floor(WORLD_SIZE * ENEMY_DENSITY);	// defines how many enemies will be randomly generated
 const EXP_RATE = 2; 		// multiplier on exp gains.
 const DAMAGE_RATE = 0.2; 	// multiplier on attack damage. affects the way STRONGTH effects damage result
+
+
 
 var Dice = {
 	//need to change this function to also accept dice is am XdY format (1d4, 2d6, 1d100...)
@@ -888,7 +892,7 @@ function JobClass(className, icon, hitDice, spellDice, strongth, agility, wisdom
 //                              
 //////////////////////////////////////////////////////////////
 function prepEventHandlers(){
-	document.addEventListener("keyup", playerKeyup, false);
+	document.addEventListener("keydown", playerKey, false);
 	document.addEventListener("click", playerClick, false);
 	console.log("in prepEventHandlers()");
 }
@@ -897,7 +901,7 @@ function prepEventHandlers(){
 
 
 
-function playerKeyup(ee){
+function playerKey(ee){
 
 	switch(ee.keyCode){
 		case 37: //left arrow
