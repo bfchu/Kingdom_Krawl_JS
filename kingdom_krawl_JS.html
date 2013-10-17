@@ -65,9 +65,10 @@ textarea{
 //////////////////////////////////////////////////
 ///
 //	Known Bugs:
-//	- items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them.
-		-related: sometimes adjacent enemies will die at the same time, even if they are different types.
-//	- sometimes enemies are dying multiple times if they are one-shot.
+//	- interactWith() or tryMove() not allowing movement between floors.
+//	- RESOLVED:items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them.
+//		-related: sometimes adjacent enemies will die at the same time, even if they are different types.
+//	- RESOLVED:sometimes enemies are dying multiple times if they are one-shot.
 //
 //
 //
@@ -365,7 +366,7 @@ function Floor(id, name){
 				} else {
 					this.addTile(kk, ii, new Tile(this.tileCount,"FLOOR", new Position(kk,ii,this.id)));
 					if((Dice.roll(1,WORLD_SIZE)) == 1){
-						this.addFeature( new Feature("Dungeon Exit", "door", new Position(kk,ii,this.id)));
+						this.addFeature( new Feature("Stairs", "door", new Position(kk,ii,this.id), new Position(kk,ii, Dice.roll(1,WORLD_DEPTH)-1), true));
 					}
 					if((Dice.roll(1,WORLD_SIZE)) == 1){
 						this.addItem(new Item("gold", "treasure", new Position(kk,ii,this.id) ,Dice.roll(10,50)));
@@ -373,7 +374,21 @@ function Floor(id, name){
 				}
 			}
 		}
+		//this.buildStairs();
 		this.buildOuterWall();
+	}
+
+	this.buildStairs = function(){
+		var numStairs = 10;
+
+		for(var ii = 0; ii < numStairs; ii++){
+			var xToTry = Dice.roll(1,WORLD_SIZE) - 1;
+			var yToTry = Dice.roll(1,WORLD_SIZE) - 1;
+			var floor = Dice.roll(1,WORLD_DEPTH) - 1;
+			if(world[this.id].tileGrid[getGridIndex(xToTry,yToTry)].isWalkable){
+				this.addFeature( new Feature("Stairs", "door", new Position(xToTry,yToTry,this.id), new Position(xToTry,yToTry, floor), true));
+			}
+		}
 	}
 
 
@@ -422,7 +437,7 @@ function Floor(id, name){
 		var success = false;
 		var index = getGridIndex(x,y);
 		var tile = this.tileGrid[index];
-		console.log("trying to add Monster at " +x + ", " + y);
+		//console.log("trying to add Monster at " +x + ", " + y);
 		try{
 			if(tile.hasCreature(index) == null && getTileDef(tile.type).isWalkable){
 				//function Creature(id,type,icon,position,name,level)
@@ -573,6 +588,16 @@ function Feature(name, icon, position, destination, isOneWay, properties){
 	this.getIndex = function(){
 		return getGridIndex(position.x, position.y);
 	}
+
+	this.findMe = function(){ //returns the index into features[] that matches this feature's position.
+		for(var ii = 0; ii< featureCount; ii++){
+			if(features[ii].position.equals(this.position)){
+				return ii;
+			}
+		}
+		return null;
+	}
+
 
 	this.hasDestination = function(){
 		if(this.doorTo != null){
@@ -725,7 +750,7 @@ function Creature(id,job,position,name,level){
 	}
 
 
-	this.tryMove = function(moveX, moveY){
+	this.tryMove = function(moveX, moveY, floor){
 
 		var pos = new Position (this.position.x + moveX, this.position.y + moveY, this.position.floor);
 		var moveIndex = getGridIndex(pos.x,pos.y);
@@ -735,14 +760,29 @@ function Creature(id,job,position,name,level){
 			case "WALKABLE":
 				this.position.x += moveX;
 				this.position.y += moveY;
+				if(floor != null){
+					this.position.floor = floor;
+				}
 				break;
 			case "CREATURE":
 				this.attack(creatures[world[pos.floor].tileGrid[moveIndex].hasCreature()]);
 				break;
 			case "WALL":
+				writeLine("Ooof!");
 			default:
 				break;
 		}
+	}
+
+	this.interactWith = function(feature){
+		//is it a portal? (stairs, trap doors, gateways)
+		console.log("In creature.interactWith()");
+		if(feature.destination != null){
+			this.tryMove(feature.destination.x - this.position.x, feature.destination.y - this.position.y, feature.destination.floor);
+		}
+		//is it a fountain?
+		//is it a shop?
+		//is it a shrine?
 	}
 
 	this.pickUp = function(itemIndex){
@@ -852,6 +892,10 @@ function playerKeyup(ee){
 		case 101: //numpad 5
 			playerMove("WAIT");
 			break;
+		case 96: //numpad 0
+		case 13: //enter key
+			playerMove("USE")
+			break;
 		default:
 			return;
 	}
@@ -912,6 +956,17 @@ function playerMove(direction){
 					creatures[player].currentMana = creatures[player].manaMax;
 				}
 				writeLine("You rest and restore " + creatures[player].level + " health and mana. HP: " + creatures[player].currentHealth + "/" + creatures[player].healthMax + " MP: " + creatures[player].currentMana + "/" + creatures[player].manaMax);
+				break;
+
+			case "USE":
+				//interact with features or respond to user prompts in the text area.
+				if(world[currentFloor].tileGrid[currentIndex].hasFeature() != null){
+					var featureIndex = world[currentFloor].tileGrid[currentIndex].hasFeature();
+					var feature = features[featureIndex]
+					creatures[player].interactWith(feature);
+				} else {
+					writeLine("Nothing to interact with.");
+				}
 				break;
 
 			default:
