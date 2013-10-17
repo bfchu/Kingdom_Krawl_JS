@@ -57,20 +57,26 @@ textarea{
 	+ character job class system, used for player character and monsters, allows for random starting gold.
 		-player class is pre-selected in code currently. later there will be a selection screen.
 	+ dungeon features such as doors, portals, stairs, traps, ect...
-	+ allow player to interact with features such as stairs and portals to traverse floors.
+	+ player can interact with portals to traverse floors. (enter/numpad0)
 	+ multiple floors/rooms.
+	+ hand-drawn tile sprites by the author.
 
-	+ TODO: dungeon features such as traps, fountains, ect...
-	+ TODO: documentation...
+	TODO: 
+	+ dungeon features such as traps, fountains, ect...
+	+ generation algorithms for different floor layouts.
+	+ loot generation. (other than gold)
+	+ documentation...
 
 //////////////////////////////////////////////////
 ///
 //	Known Bugs:
-//	- RESOLVED: floor.createReciprocal() not working correctly: only sometimes successfully creates a return portal in the right spot.
+//	- if the WORLD_SIZE is set smaller than the screen, strange things...
 //	- portals sometimes take you to their own location.
+//		-related: portals sometimes overlap and create portal loops that can be unpredictable.
 //	- RESOLVED:items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them.
 //		-related: sometimes adjacent enemies will die at the same time, even if they are different types.
 //	- RESOLVED:sometimes enemies are dying multiple times if they are one-shot.
+//	- RESOLVED: floor.createReciprocal() not working correctly: only sometimes successfully creates a return portal in the right spot.
 //
 //
 //
@@ -88,6 +94,7 @@ imageLoader.queueImage("door");
 imageLoader.queueImage("portal");
 
 //items
+imageLoader.queueImage("gold");
 imageLoader.queueImage("treasure");
 
 //creatures
@@ -242,6 +249,7 @@ function gameRestart(){
 	/*TODO: 
 	-clear the text window on restart
 	*/
+
 	world = [];
 	creatures = [];
 	creatureCount = 1;
@@ -262,7 +270,6 @@ function gameRestart(){
 }
 
 
-
 function gameOverFail(){
 	writeLine("You have died...");
 	//TODO: wait for user input (mouse click) and then go to score screen.
@@ -273,7 +280,6 @@ function gameOverWin(){
 	writeLine("You have won!");
 	//TODO: win screen (score screen) and wait for user input.
 }
-
 
 
 
@@ -407,7 +413,7 @@ function Floor(id, name){
 						this.createReciprocal(features[featureCount-1]);
 					}
 					if((Dice.roll(1,WORLD_SIZE)) == 1){
-						this.addItem(new Item("gold", "treasure", new Position(kk,ii,floorIndex) ,Dice.roll(10,50)));
+						this.addItem(new Item("gold", "gold", new Position(kk,ii,floorIndex) ,Dice.roll(10,50)));
 					}
 				}
 			}
@@ -724,7 +730,7 @@ function Creature(id,job,position,name,level){
 			creatureCount--;
 		} else {
 			if(this.gold > 0){
-				items[itemCount] = new Item("gold","treasure", this.position, this.gold);
+				items[itemCount] = new Item("gold","gold", this.position, this.gold);
 				itemCount++;
 			}
 			creatures.splice(this.findMe(), 1);
