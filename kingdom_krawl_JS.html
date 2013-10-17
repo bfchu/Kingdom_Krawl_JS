@@ -66,7 +66,7 @@ textarea{
 //////////////////////////////////////////////////
 ///
 //	Known Bugs:
-//	- floor.createReciprocal() not working correctly.
+//	- floor.createReciprocal() not working correctly: only sometimes successfully creates a return portal in the right spot.
 //	- portals sometimes take you to their own location.
 //	- RESOLVED:items (such as gold) are sometimes duplicated nearby eachother. both disapear if you pick up one of them.
 //		-related: sometimes adjacent enemies will die at the same time, even if they are different types.
@@ -289,12 +289,15 @@ function buildWorld(){
 	for(var ii = 0; ii < WORLD_DEPTH; ii++){
 		addFloor("Floor " + (floorCount+1));
 	}
+	for(var ii = 0; ii < WORLD_DEPTH; ii++){
+		world[ii].buildFloor();
+	}
 }
 
 function addFloor(name){
 	floorCount++;
-	world[floorCount -1] = new Floor(floorCount-1, name);
-	world[floorCount -1].buildFloor();
+	world[floorCount - 1] = new Floor(floorCount-1, name);
+	world[floorCount - 1].fillGrid("WALL");
 }
 
 
@@ -366,6 +369,7 @@ function Floor(id, name){
 	}
 
 	this.buildFloor = function(genStyle){
+		this.tileCount = 0;
 		var s = "";
 		if (genStyle != null) {
 			s = genStyle;
@@ -461,22 +465,22 @@ function Floor(id, name){
 			while(!success && count < limit){
 				var xToTry = Dice.roll(1,WORLD_SIZE) - 1;
 				var yToTry = Dice.roll(1,WORLD_SIZE) - 1;
-				success = this.addMonster(xToTry, yToTry);
+				success = this.addMonster(xToTry, yToTry, this.findMe());
 				count++;
 			}
 		}
 	}
 
-	this.addMonster = function(x, y){
+	this.addMonster = function(x, y, floor){
 		var success = false;
-		var index = getGridIndex(x,y);
-		var tile = this.tileGrid[index];
+		var pos = new Position(x,y,floor);
+		var tile = getTile(pos);
 		//console.log("trying to add Monster at " +x + ", " + y);
 		try{
-			if(tile.hasCreature(index) == null && getTileDef(tile.type).isWalkable){
+			if(tile.hasCreature() == null && getTileDef(tile.type).isWalkable){
 				//function Creature(id,type,icon,position,name,level)
 				var namai = getRandMonster();
-				var monster = new Creature(creatureCount, namai, new Position(x,y,this.id), namai, Dice.roll(1,4));
+				var monster = new Creature(creatureCount, namai, pos, namai, Dice.roll(1,4));
 				this.addCreature(monster);
 				success = true;
 			}
@@ -489,25 +493,27 @@ function Floor(id, name){
 
 
 	this.addCreature = function(critter){
-		if(this.tileGrid[critter.getIndex()].hasCreature() == null){  //creatures do not share space with eachother.
+		if(getTile(critter.position).hasCreature() == null){  //creatures do not share space with eachother.
 			creatures[creatureCount] = critter;
 			creatureCount++;
 		}
 	}
 
 	this.addFeature = function(mcguffin){
-		if(this.tileGrid[mcguffin.getIndex()].hasFeature() == null){ //features do not share space with eachother, but can sometimes be part of a wall, pit, ect
+		if(getTile(mcguffin.position).hasFeature() == null){ //features do not share space with eachother, but can sometimes be part of a wall, pit, ect
 			features[featureCount] = mcguffin;
 			featureCount++;
 		}
 	}
 
 	this.createReciprocal = function(portal){
-		this.addFeature( new Feature(portal.name, portal.icon, portal.destination, portal.position));
+		var pos = new Position(portal.destination.x, portal.destination.y, portal.destination.floor);
+		var dest = new Position(portal.position.x, portal.position.y, portal.position.floor);
+		this.addFeature( new Feature(portal.name, portal.icon, pos, dest));
 	}
 
 	this.addItem = function(item){
-		if(this.tileGrid[item.getIndex()].hasFeature() == null){ //items cannot share space with Features, walls, pits, ect...
+		if(getTile(item.position).hasFeature() == null){ //items cannot share space with Features, walls, pits, ect...
 			items[itemCount] = item;
 			itemCount++;
 		}
@@ -530,24 +536,13 @@ function Tile(id, tileType, position){
 	this.type = tileType; //identifier for indexing into array of tile definitions.
 	this.position = position;
 
-	this.hasCreature = function(index){
+	this.hasCreature = function(){
 		try{
-			if(index != null){
-				for(var ii = 0; ii < creatureCount; ii++){
-					if(creatures[ii].position.floor == this.position.floor){
-						if(creatures[ii].position.x == getGridXY(index).x  &&
-							creatures[ii].position.y == getGridXY(index).y){
-							return ii;
-						}
-					}
-				}
-			} else {
-				for(var ii = 0; ii < creatureCount; ii++){
-					if(creatures[ii].position.floor == this.position.floor){
-						if(creatures[ii].position.x == getGridXY(this.id).x  &&
-							creatures[ii].position.y == getGridXY(this.id).y){
-							return ii;
-						}
+			for(var ii = 0; ii < creatureCount; ii++){
+				if(creatures[ii].position.floor == this.position.floor){
+					if(creatures[ii].position.x == getGridXY(this.id).x  &&
+						creatures[ii].position.y == getGridXY(this.id).y){
+						return ii;
 					}
 				}
 			}
@@ -558,24 +553,13 @@ function Tile(id, tileType, position){
 	}
 
 
-	this.hasFeature = function(index){
+	this.hasFeature = function(){
 		try{
-			if(index != null){
-				for(var ii = 0; ii < featureCount; ii++){
-					if(features[ii].position.floor == this.position.floor){
-						if(features[ii].position.x == getGridXY(index).x  &&
-							features[ii].position.y == getGridXY(index).y){
-							return ii;
-						}
-					}
-				}
-			} else {
-				for(var ii = 0; ii < featureCount; ii++){
-					if(features[ii].position.floor == this.position.floor){
-						if(features[ii].position.x == getGridXY(this.id).x  &&
-							features[ii].position.y == getGridXY(this.id).y){
-							return ii;
-						}
+			for(var ii = 0; ii < featureCount; ii++){
+				if(features[ii].position.floor == this.position.floor){
+					if(features[ii].position.x == getGridXY(this.id).x  &&
+						features[ii].position.y == getGridXY(this.id).y){
+						return ii;
 					}
 				}
 			}
@@ -586,28 +570,18 @@ function Tile(id, tileType, position){
 	}
 
 
-	this.hasItem = function(index){
-		if(index != null){
-			for(var ii = 0; ii < itemCount; ii++){
-				if(items[ii].position.floor == this.position.floor){
-					if(items[ii].position.x == getGridXY(index).x  &&
-						items[ii].position.y == getGridXY(index).y){
-						return ii;
-					}
-				}
-			}
-		} else {
-			for(var ii = 0; ii < itemCount; ii++){
-				if(items[ii].position.floor == this.position.floor){
-					if(items[ii].position.x == getGridXY(this.id).x  &&
-						items[ii].position.y == getGridXY(this.id).y){
-						return ii;
-					}
+	this.hasItem = function(){
+		for(var ii = 0; ii < itemCount; ii++){
+			if(items[ii].position.floor == this.position.floor){
+				if(items[ii].position.x == getGridXY(this.id).x  &&
+					items[ii].position.y == getGridXY(this.id).y){
+					return ii;
 				}
 			}
 		}
 		return null;
 	}
+
 }
 
 
@@ -798,7 +772,7 @@ function Creature(id,job,position,name,level){
 				}
 				break;
 			case "CREATURE":
-				this.attack(creatures[world[pos.floor].tileGrid[moveIndex].hasCreature()]);
+				this.attack(creatures[getTile(pos).hasCreature()]);
 				break;
 			case "WALL":
 				writeLine("Ooof!");
@@ -951,8 +925,6 @@ function playerKey(ee){
 //TODO: documentation for playerMove()
 // A lot of the game logic goes through this function, it enables 8 directional movement for the player character, and combat.
 function playerMove(direction){
-	var currentIndex = getGridIndex(creatures[player].position.x,creatures[player].position.y);
-	var currentFloor = creatures[player].position.floor;
 
 	if(playerIsAlive){
 		switch(direction){
@@ -1003,8 +975,8 @@ function playerMove(direction){
 
 			case "USE":
 				//interact with features or respond to user prompts in the text area.
-				if(world[currentFloor].tileGrid[currentIndex].hasFeature() != null){
-					var featureIndex = world[currentFloor].tileGrid[currentIndex].hasFeature();
+				if(getTile(creatures[player].position).hasFeature() != null){
+					var featureIndex = getTile(creatures[player].position).hasFeature();
 					var feature = features[featureIndex]
 					creatures[player].interactWith(feature);
 				} else {
@@ -1015,11 +987,10 @@ function playerMove(direction){
 			default:
 				return;
 		}
-		currentIndex = getGridIndex(creatures[player].position.x,creatures[player].position.y);
 
 		//check for items, pick up the first one found in the list.
-		if(world[currentFloor].tileGrid[currentIndex].hasItem() != null){
-			var itemIndex = world[currentFloor].tileGrid[currentIndex].hasItem(currentIndex);
+		if(getTile(creatures[player].position).hasItem() != null){
+			var itemIndex = getTile(creatures[player].position).hasItem();
 			var anItem = items[itemIndex];
 			var line = "You pick up " + anItem.quantity + " " + anItem.name + ".";
 			creatures[player].pickUp(itemIndex);
@@ -1041,11 +1012,11 @@ function playerMove(direction){
 
 
 function peekAt(x, y, floorId){
-	var floor = world[floorId];
-	if(!getTileDef(floor.tileGrid[getGridIndex(x, y)].type).isWalkable){
+	var pos = new Position(x,y,floorId);
+	if(!getTileDef(getTile(pos).type).isWalkable){
 		return "WALL";
 	}
-	if(floor.tileGrid[getGridIndex(x, y)].hasCreature() != null){
+	if(getTile(pos).hasCreature() != null){
 		return "CREATURE";
 	}
 
