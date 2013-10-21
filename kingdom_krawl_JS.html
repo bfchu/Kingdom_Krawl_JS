@@ -62,19 +62,24 @@ textarea{
 	+ player can interact with portals to traverse floors. (enter/numpad0)
 	+ multiple floors/rooms. Floors are independtant objects, can be associated in any way, allowing for any number of connections.
 	+ hand-drawn tiles and sprites by the author.
-	+ 
+	+ Linear floor progression guaranteed by 2-way stairs linking the floors.
 
 	TODO: 
+	+ Create a related level progression of monsters and items as floor depth increases.
 	+ dungeon features such as traps, fountains, ect...
 	+ generation algorithms for different floor layouts.
 	+ loot generation. (other than gold)
 	+ skill mastery system (dodging, trap finding, weaponry, magics...)
-	+ world time passage based on turn count
-	+ hunger system (and food items)
+	+ creature line-of-sight and sight distance
+	+ concept of light-levels either bound to tiles or the floor, probably a cooperation of both.
+	+ world time passage based on turn count; creature movement,attacks, and other actions have a "turn count" that they take to complete.
+	+ hunger system (and food items), affects only the player character.
 	+ inventory systems/inventory screens
 	+ Game splash screen
 	+ class selection screen
 	+ temporary instance dungeons (once you enter, the pocket dungeon is only there until you leave, then it is deleted)
+	+ "ley lines" special tile effects and puzzels.
+		-There will be special features called "ley stones" that create a line of tiles (only the 4 cardinal directions) that are toned an oscilating bright color, and have special effects, such as "+50% Atk" meaning anything standing on it deals more damage.  There will usually be more than one ley stone on a floor that has them, and if you move close to a ley stone you can change the direction in which it lays it's ley line.  If you get two ley lines to intersect, they will combine their effects and colors (towards white) and their direction will be decided by a simple hierarchy. If you can get a white ley line to a "goal stone" then the goal stone will turn into a chest with a powerful item in it, and the ley stones will disapear.
 	+ 
 	+ Design level and story content <_<
 	+
@@ -99,24 +104,26 @@ textarea{
 
 //Image Loading:
 //tiles
-imageLoader.queueImage("wall");
-imageLoader.queueImage("floor");
-imageLoader.queueImage("water");
-imageLoader.queueImage("black");
+imageLoader.queueImage("wall"); //by Brian Chu
+imageLoader.queueImage("floor"); //by Brian Chu
+imageLoader.queueImage("water"); //by Pousse Rapiere
+imageLoader.queueImage("black");  //by Brian Chu :D
 
 //features
-imageLoader.queueImage("door");
-imageLoader.queueImage("portal");
+imageLoader.queueImage("door"); //by Pousse Rapiere
+imageLoader.queueImage("portal"); //by Brian Chu
+imageLoader.queueImage("stairs_up") //by Brian Chu, based on art by Clint Ballinger
+imageLoader.queueImage("stairs_down") //by Brian Chu, based on art Clint Ballinger
 
 //items
-imageLoader.queueImage("gold");
-imageLoader.queueImage("treasure");
+imageLoader.queueImage("gold"); //by Brian Chu
+imageLoader.queueImage("treasure"); //by Pousse Rapiere
 
 //creatures
-imageLoader.queueImage("hero");
-imageLoader.queueImage("goblin");
-imageLoader.queueImage("golem");
-imageLoader.queueImage("dragon");
+imageLoader.queueImage("hero"); //by Pousse Rapiere
+imageLoader.queueImage("goblin"); //by Pousse Rapiere
+imageLoader.queueImage("golem"); //by Pousse Rapiere
+imageLoader.queueImage("dragon"); //by Pousse Rapiere
 
 
 //game settings:
@@ -138,13 +145,14 @@ var Dice = {
 	roll: function (numDice, dieSize){
 		var dRoll = 0;
 		for(var ii = 0; ii < numDice; ii++){
-			dRoll += (Math.floor(Math.random(WORLD_SEED)*100) % dieSize) + 1;
+			dRoll += (Math.floor(Math.random(WORLD_SEED)*10000) % dieSize) + 1;
 		}
+		//console.log("Dice.roll(): rolled: " + dRoll);
 		return dRoll;
 	},
 
 	rollPercent: function (){
-		return (Math.floor(Math.random(WORLD_SEED)*100) % 100) + 1;
+		return (Math.floor(Math.random(WORLD_SEED)*10000) % 100) + 1;
 	}
 };
 
@@ -259,6 +267,7 @@ imageLoader.loadQueuedImages(gameRestart);
 
 
 
+
 function gameRestart(){
 
 	/*TODO: 
@@ -312,6 +321,9 @@ function buildWorld(){
 	}
 	for(var ii = 0; ii < WORLD_DEPTH; ii++){
 		world[ii].buildFloor();
+	}
+	for(var ii = 0; ii < WORLD_DEPTH-1; ii++){
+		world[ii].buildStairs();
 	}
 }
 
@@ -423,7 +435,7 @@ function Floor(id, name){
 					this.addTile(kk, ii, new Tile(this.tileCount, "WALL", new Position(kk,ii,floorIndex)));
 				} else {
 					this.addTile(kk, ii, new Tile(this.tileCount,"FLOOR", new Position(kk,ii,floorIndex)));
-					if((Dice.roll(1,WORLD_SIZE)) == 1){
+					if((Dice.roll(1,1000)) == 1){
 						this.addFeature( new Feature("Portal", "portal", new Position(kk,ii,floorIndex), new Position(kk,ii, Dice.roll(1,WORLD_DEPTH)-1)));
 						this.createReciprocal(features[featureCount-1]);
 					}
@@ -433,23 +445,38 @@ function Floor(id, name){
 				}
 			}
 		}
-		//this.buildStairs();
+		
 		this.buildOuterWall();
 	}
 
-	this.buildStairs = function(floor){
-		var numStairs = 10;
-
+	//this function is used to ensure that every main floor has 2-way stairs connecting it to the next floor.
+	//should only be called after a floor's tiles have been set.
+	this.buildStairs = function(){
+		var numStairs = 5; //this should probably be a global constant
+		//console.log("In buildStairs(): attempting to add stairs");
 		for(var ii = 0; ii < numStairs; ii++){
 			var xToTry = Dice.roll(1,WORLD_SIZE) - 1;
 			var yToTry = Dice.roll(1,WORLD_SIZE) - 1;
-			var floor = Dice.roll(1,WORLD_DEPTH) - 1;
-			if(world[floor].tileGrid[getGridIndex(xToTry,yToTry)].isWalkable){
-				this.addFeature( new Feature("Stairs", "door", new Position(xToTry,yToTry,floor), new Position(xToTry,yToTry, floor), true));
+			var floor = this.findMe();
+			var success = false;
+			var failSafe = 0;
+			while(!success && failSafe < 50){
+				failSafe++;
+				if(getTile(new Position(xToTry,yToTry,floor)).walkable() &&
+					getTile(new Position(xToTry,yToTry,floor + 1)).walkable()){
+					this.addFeature( new Feature("Stairs", "stairs_down", new Position(xToTry,yToTry,floor), new Position(xToTry,yToTry,floor+1), true));
+					this.createReciprocal(features[featureCount-1],"stairs_up");
+					//console.log("Success!");
+					success = true;
+				}
 			}
 		}
 	}
 
+	this.carveRect = function(pos, sizeX, sizeY){
+		//use the starting position, replace tiles with floor tiles until the rectangle of the given sizes is carved out.
+
+	}
 
 	this.buildMaze = function(){
 		//carving method: fill the whole grid with walls,
@@ -527,10 +554,14 @@ function Floor(id, name){
 		}
 	}
 
-	this.createReciprocal = function(portal){
+	this.createReciprocal = function(portal, iconName){
 		var pos = new Position(portal.destination.x, portal.destination.y, portal.destination.floor);
 		var dest = new Position(portal.position.x, portal.position.y, portal.position.floor);
-		this.addFeature( new Feature(portal.name, portal.icon, pos, dest));
+		if(iconName != null){
+			this.addFeature( new Feature(portal.name, iconName, pos, dest));
+		} else {
+			this.addFeature( new Feature(portal.name, portal.icon, pos, dest));
+		}
 	}
 
 	this.addItem = function(item){
@@ -556,6 +587,10 @@ function Tile(id, tileType, position){
 	this.id = id; //unique id
 	this.type = tileType; //identifier for indexing into array of tile definitions.
 	this.position = position;
+
+	this.walkable = function(){
+		return getTileDef(this.type).isWalkable;
+	}
 
 	this.hasCreature = function(){
 		try{
@@ -806,7 +841,7 @@ function Creature(id,job,position,name,level){
 
 		if(getTileDef(getTile(destination).type).isWalkable){
 			this.position = destination;
-			writeLine("The portal takes you to " + world[this.position.floor].name + ".");
+			writeLine(this.name +" arrives on " + world[this.position.floor].name + ".");
 		} else {
 			writeLine("Cannot teleport to destination.");
 		}
