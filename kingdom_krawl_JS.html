@@ -32,13 +32,14 @@ textarea{
 <textarea id="outputText" cols="80" rows="12" readonly="readonly"></textarea>
 
 <script src="scripts/imageLoader.js"></script>
+
 <script>
 /*////////////////////////////////////////////
 ///			Kingdom Krawl JS   v0.0.9      //
 //////////////////////////////////////////////////
 ///
 //	Author: Brian F. Chu
-//	Art: Brian Chu and Eli Boggs
+//	Art: Brian Chu
 //	Copyright 2013 SNS Games
 //	Santa Rosa, CA, USA
 //
@@ -52,19 +53,32 @@ textarea{
 	+ 'Camera' follows player as they move and snaps to corners/walls of the grid.
 	+ 8-direction movement using the numpad
 	+ press numpad5 to wait, rest, and view your HP/MP
-	+ supports sprite tiles
+	+ supports loading and rendering sprites/tiles.
 	+ simulates dice-rolling for getting random numbers.
 	+ character job class system, used for player character and monsters, allows for random starting gold.
 		-player class is pre-selected in code currently. later there will be a selection screen.
+	+ experience gain and character level progression! Monsters can level up too!
 	+ dungeon features such as doors, portals, stairs, traps, ect...
 	+ player can interact with portals to traverse floors. (enter/numpad0)
-	+ multiple floors/rooms.
-	+ hand-drawn tile sprites by the author.
+	+ multiple floors/rooms. Floors are independtant objects, can be associated in any way, allowing for any number of connections.
+	+ hand-drawn tiles and sprites by the author.
+	+ 
 
 	TODO: 
 	+ dungeon features such as traps, fountains, ect...
 	+ generation algorithms for different floor layouts.
 	+ loot generation. (other than gold)
+	+ skill mastery system (dodging, trap finding, weaponry, magics...)
+	+ world time passage based on turn count
+	+ hunger system (and food items)
+	+ inventory systems/inventory screens
+	+ Game splash screen
+	+ class selection screen
+	+ temporary instance dungeons (once you enter, the pocket dungeon is only there until you leave, then it is deleted)
+	+ 
+	+ Design level and story content <_<
+	+
+	+ Separate code into .js files.
 	+ documentation...
 
 //////////////////////////////////////////////////
@@ -81,6 +95,7 @@ textarea{
 //
 //
 /////////////////////////////////////////////////*/
+
 
 //Image Loading:
 //tiles
