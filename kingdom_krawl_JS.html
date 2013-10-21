@@ -39,7 +39,7 @@ textarea{
 //////////////////////////////////////////////////
 ///
 //	Author: Brian F. Chu
-//	Art: Brian Chu
+//	Art: Brian Chu and Other contributing artists
 //	Copyright 2013 SNS Games
 //	Santa Rosa, CA, USA
 //
@@ -58,10 +58,10 @@ textarea{
 	+ character job class system, used for player character and monsters, allows for random starting gold.
 		-player class is pre-selected in code currently. later there will be a selection screen.
 	+ experience gain and character level progression! Monsters can level up too!
-	+ dungeon features such as doors, portals, stairs, traps, ect...
-	+ player can interact with portals to traverse floors. (enter/numpad0)
-	+ multiple floors/rooms. Floors are independtant objects, can be associated in any way, allowing for any number of connections.
-	+ hand-drawn tiles and sprites by the author.
+	+ dungeon features: portals and stairs.
+	+ player can interact with portals and stairs to traverse floors. (enter/numpad0)
+	+ multiple floors/rooms. Floors are independant objects, can be associated in any way, allowing for any number of connections.
+	+ hand-drawn tiles and sprites by the author and other contributing artists.
 	+ Linear floor progression guaranteed by 2-way stairs linking the floors.
 
 	TODO: 
@@ -260,7 +260,7 @@ var playerIsAlive = true;
 var player = 0;
 
 
-
+//this line starts the game "loop"
 imageLoader.loadQueuedImages(gameRestart);
 
 
@@ -1083,13 +1083,6 @@ function playerClick(ee){
 
 
 }
-
-
-
-///////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////
-
-
 
 
 
