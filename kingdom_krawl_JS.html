@@ -349,7 +349,8 @@ function getGridXY(index){
 
 
 function getTile(position){
-	return world[position.floor].tileGrid[getGridIndex(position.x, position.y)];
+	var index = getGridIndex(position.x, position.y);
+	return world[position.floor].tileGrid[index];
 }
 
 
@@ -382,9 +383,10 @@ function Floor(id, name){
 	this.name = name;
 
 	this.tileGrid = [];
-	this.tileCount = 0;
+	//this.tileCount = 0;
 
 	this.findMe = function(floorName){
+		//console.log("In Floor.findMe(): ");
 		if(floorName !=null){
 			for(var ii = 0; ii< floorCount; ii++){
 				if(world[ii].name == floorName){
@@ -402,7 +404,7 @@ function Floor(id, name){
 	}
 
 	this.buildFloor = function(genStyle){
-		this.tileCount = 0;
+		//this.tileCount = 0;
 		var s = "";
 		if (genStyle != null) {
 			s = genStyle;
@@ -420,11 +422,14 @@ function Floor(id, name){
 		}
 		//enemies
 		this.spawnMonsters();
+		//items
+		this.spawnLoot();
 	}
 
-	this.addTile = function(x,y, tile){
-		this.tileGrid[getGridIndex(x,y)] = tile;
-		this.tileCount++;
+	this.addTile = function(tile){
+		var index = getGridIndex(tile.position.x,tile. position.y);
+		this.tileGrid[index] = tile;
+		//this.tileCount++; 
 	}
 
 	this.buildSparse = function(){
@@ -432,20 +437,19 @@ function Floor(id, name){
 		for(var ii = 0; ii < WORLD_SIZE; ii++){
 			for(var kk = 0; kk < WORLD_SIZE; kk++){
 				if((Dice.roll(1,4)) == 1){
-					this.addTile(kk, ii, new Tile(this.tileCount, "WALL", new Position(kk,ii,floorIndex)));
+					this.addTile( new Tile("WALL", new Position(kk,ii,floorIndex)));
 				} else {
-					this.addTile(kk, ii, new Tile(this.tileCount,"FLOOR", new Position(kk,ii,floorIndex)));
-					if((Dice.roll(1,1000)) == 1){
-						this.addFeature( new Feature("Portal", "portal", new Position(kk,ii,floorIndex), new Position(kk,ii, Dice.roll(1,WORLD_DEPTH)-1)));
-						this.createReciprocal(features[featureCount-1]);
-					}
-					if((Dice.roll(1,WORLD_SIZE)) == 1){
-						this.addItem(new Item("gold", "gold", new Position(kk,ii,floorIndex) ,Dice.roll(10,50)));
-					}
+					this.addTile( new Tile("FLOOR", new Position(kk,ii,floorIndex)));
+					// if((Dice.roll(1,1000)) == 1){
+					// 	this.addFeature( new Feature("Portal", "portal", new Position(kk,ii,floorIndex), new Position(kk,ii, Dice.roll(1,WORLD_DEPTH)-1)));
+					// 	this.createReciprocal(features[featureCount-1]);
+					// }
+					// if((Dice.roll(1,WORLD_SIZE)) == 1){
+					// 	this.addItem(new Item("gold", "gold", Dice.roll(10,50), new Position(kk,ii,floorIndex)));
+					// }
 				}
 			}
 		}
-		
 		this.buildOuterWall();
 	}
 
@@ -473,22 +477,50 @@ function Floor(id, name){
 		}
 	}
 
-	this.carveRect = function(pos, sizeX, sizeY){
+	this.buildMaze = function(){
+		//carving method: fill the whole grid with walls,
+		this.fillGrid("WALL");
+		// then 'carve' out chunks for rooms and halls
+		this.carveRooms(24);
+		this.buildOuterWall();
+		this.buildStairs();
+	}
+
+
+	this.carveRect = function(upperLeft, sizeX, sizeY){
 		//use the starting position, replace tiles with floor tiles until the rectangle of the given sizes is carved out.
+
+		for (var ii = 0; ii < sizeX; ++ii) {
+	        for (var kk = 0; kk < sizeY; ++kk) {
+	        	if(upperLeft.x + ii < WORLD_SIZE && upperLeft.y + kk < WORLD_SIZE){
+		        	var replace =  new Position(upperLeft.x + ii, upperLeft.y + kk, this.findMe());
+				    this.addTile( new Tile("Floor", replace) );
+				}
+	        }
+		}
 
 	}
 
-	this.buildMaze = function(){
-		//carving method: fill the whole grid with walls,
-		this.fillGrid("WALL", grid);
-		// then 'carve' out chunks for rooms and halls
+
+	this.carveRooms = function(rooms){
+		var numRooms = Dice.roll(8,2);
+		if(rooms != null){
+			numRooms = rooms;
+		}
+
+		for(var ii = 0; ii < numRooms; ii++){
+			var sizeX = Dice.roll(4,8);
+			var sizeY = Dice.roll(4,8);
+			var pos = new Position(Dice.roll(1,WORLD_SIZE)-1,Dice.roll(1,WORLD_SIZE)-1, this.findMe());
+			this.carveRect(pos, sizeX, sizeY);
+		}
 	}
 
 
 	this.fillGrid = function(tileType){
 		for (var ii = 0; ii < WORLD_SIZE; ++ii) {
 	        for (var kk = 0; kk < WORLD_SIZE; ++kk) {
-			    this.addTile(kk, ii, new Tile(this.tileCount, tileType, new Position(kk,ii,this.findMe())));
+			    this.addTile( new Tile(tileType, new Position(kk,ii,this.findMe())));
 	        }
 		}
 	}
@@ -498,9 +530,31 @@ function Floor(id, name){
 		for (var ii = 0; ii < WORLD_SIZE; ++ii) {
 	        for (var kk = 0; kk < WORLD_SIZE; ++kk) {
 				if (ii == 0 || ii == WORLD_SIZE - 1 || kk == 0 || kk == WORLD_SIZE - 1) {
-		            this.addTile(kk, ii, new Tile(this.tileCount, "WALL", new Position(kk,ii,this.findMe())));
+		            this.addTile( new Tile("WALL", new Position(kk,ii,this.findMe())));
 				}
 	        }
+		}
+	}
+
+
+	this.spawnLoot = function(){
+		var numItems = 50;
+		for(var ii = 0; ii < numItems; ii++){
+			var item = new Item("gold", "gold", Dice.roll(10,50)) // TODO: getRandItem();
+			var success = false;
+			var failSafe = 100 + numItems * numItems; //failSafe to prevent endless loops in rare circumstances
+			var count = 0;
+			while(!success && count < failSafe){
+				count++;
+				var xToTry = Dice.roll(1,WORLD_SIZE) - 1;
+				var yToTry = Dice.roll(1,WORLD_SIZE) - 1;
+				item.position = new Position(xToTry, yToTry, this.findMe())
+				if(getTile(item.position).walkable() &&
+					getTile(item.position).walkable()){
+					success = true;
+					this.addItem(item);
+				}
+			}
 		}
 	}
 
@@ -508,9 +562,9 @@ function Floor(id, name){
 	this.spawnMonsters = function(){
 		for(var ii = 0; ii < NUM_ENEMIES; ii++){
 			var success = false;
-			var limit = 100 + NUM_ENEMIES * NUM_ENEMIES; //limiter to prevent endless loops in rare circumstances
+			var failSafe = 100 + NUM_ENEMIES * NUM_ENEMIES; //failSafe to prevent endless loops in rare circumstances
 			var count = 0;
-			while(!success && count < limit){
+			while(!success && count < failSafe){
 				var xToTry = Dice.roll(1,WORLD_SIZE) - 1;
 				var yToTry = Dice.roll(1,WORLD_SIZE) - 1;
 				success = this.addMonster(xToTry, yToTry, this.findMe());
@@ -564,6 +618,7 @@ function Floor(id, name){
 		}
 	}
 
+
 	this.addItem = function(item){
 		if(getTile(item.position).hasFeature() == null){ //items cannot share space with Features, walls, pits, ect...
 			items[itemCount] = item;
@@ -583,8 +638,8 @@ function TileDefinition(name, icon, isWalkable) {
 
 
 //@constructor
-function Tile(id, tileType, position){
-	this.id = id; //unique id
+function Tile(tileType, position){
+	//this.id = id; //unique id
 	this.type = tileType; //identifier for indexing into array of tile definitions.
 	this.position = position;
 
@@ -592,12 +647,21 @@ function Tile(id, tileType, position){
 		return getTileDef(this.type).isWalkable;
 	}
 
+	this.findMe = function(){
+		var pos = this.position;
+		for(var ii = 0; ii< featureCount; ii++){
+			if(pos.equals( world[pos.floor].tileGrid[ii].position )){
+				return ii;
+			}
+		}
+		return null;
+	}
+
 	this.hasCreature = function(){
 		try{
 			for(var ii = 0; ii < creatureCount; ii++){
 				if(creatures[ii].position.floor == this.position.floor){
-					if(creatures[ii].position.x == getGridXY(this.id).x  &&
-						creatures[ii].position.y == getGridXY(this.id).y){
+					if(creatures[ii].position.equals(this.position)){
 						return ii;
 					}
 				}
@@ -613,8 +677,7 @@ function Tile(id, tileType, position){
 		try{
 			for(var ii = 0; ii < featureCount; ii++){
 				if(features[ii].position.floor == this.position.floor){
-					if(features[ii].position.x == getGridXY(this.id).x  &&
-						features[ii].position.y == getGridXY(this.id).y){
+					if(features[ii].position.equals(this.position)){
 						return ii;
 					}
 				}
@@ -629,8 +692,7 @@ function Tile(id, tileType, position){
 	this.hasItem = function(){
 		for(var ii = 0; ii < itemCount; ii++){
 			if(items[ii].position.floor == this.position.floor){
-				if(items[ii].position.x == getGridXY(this.id).x  &&
-					items[ii].position.y == getGridXY(this.id).y){
+				if(items[ii].position.equals(this.position)){
 					return ii;
 				}
 			}
@@ -676,11 +738,13 @@ function Feature(name, icon, position, destination, properties){
 
 
 //@constructor
-function Item(name, icon, position, quantity, properties){
+function Item(name, icon, quantity, position, properties){
 	this.name = name;
 	this.icon = icon;
-	this.position = position;
 	this.quantity = quantity;
+	if(position != null){
+		this.position = position;
+	}
 	this.properties = properties;
 
 	this.getIndex = function(){
@@ -692,7 +756,7 @@ function Item(name, icon, position, quantity, properties){
 //constructor
 function Creature(id,job,position,name,level){
 	//system data
-	this.id = id;
+	//this.id = id;
 	this.job = job; //JobClass obj; contains stat rates for leveling.
 	this.icon = getJobDef(this.job).icon;
 	this.position = position; //Position obj (x,y)
@@ -780,7 +844,7 @@ function Creature(id,job,position,name,level){
 			creatureCount--;
 		} else {
 			if(this.gold > 0){
-				items[itemCount] = new Item("gold","gold", this.position, this.gold);
+				items[itemCount] = new Item("gold","gold", this.gold, this.position);
 				itemCount++;
 			}
 			creatures.splice(this.findMe(), 1);
